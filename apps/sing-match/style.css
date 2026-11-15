@@ -1,0 +1,37 @@
+/* Sing it: live pitch display. Colours come from the core variables only. */
+.sm-prompt { min-height: 84px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.sm-big { font-size: 44px; line-height: 1; font-weight: 600; color: var(--accent); }
+.sm-dots { display: flex; gap: 14px; }
+.sm-dots span { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--muted); transition: .2s; }
+.sm-dots span.sm-now { border-color: var(--accent); transform: scale(1.25); }
+.sm-dots span.sm-done { background: var(--good); border-color: var(--good); }
+
+.sm-meter {
+  position: relative; width: 100%; max-width: 340px; height: min(280px, 38dvh); flex: none;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden;
+  opacity: .55; transition: opacity .2s, border-color .2s;
+}
+.sm-meter.sm-live { opacity: 1; border-color: var(--muted); }
+.sm-band {
+  position: absolute; left: 0; right: 0; top: 50%; height: 14px; transform: translateY(-50%);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-top: 1px solid var(--accent); border-bottom: 1px solid var(--accent);
+}
+.sm-dot {
+  position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px;
+  transition: transform .09s linear, opacity .25s; opacity: .25; will-change: transform;
+}
+.sm-dot.sm-on { opacity: 1; }
+.sm-dot i { position: absolute; inset: 14px; border-radius: 50%; background: var(--fg); transition: background .1s; }
+.sm-dot.sm-in i { background: var(--good); }
+.sm-dot svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.sm-dot circle { fill: none; stroke: var(--good); stroke-width: 4; stroke-linecap: round; }
+
+.sm-controls { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; width: 100%; max-width: 340px; }
+.sm-controls .ml-round { grid-column: 2; width: 80px; height: 80px; font-size: 28px; transition: opacity .2s; }
+.sm-controls .ml-round.sm-busy { opacity: .5; }
+.sm-controls .ml-round.sm-off { visibility: hidden; }
+.sm-skip { grid-column: 3; justify-self: end; font-size: 15px; color: var(--muted); }
+.sm-offer { min-height: 48px; }
+.sm-offer.sm-off { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) { .sm-dot { transition: opacity .25s; } }
