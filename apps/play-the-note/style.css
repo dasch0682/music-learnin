@@ -1,0 +1,27 @@
+/* Play the note. Colours come from the core variables only. */
+.pn-staff { width: 100%; }
+.pn-input { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 14px; min-height: 150px; justify-content: center; }
+.pn-msg { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.pn-msg .ml-hint { max-width: 300px; }
+
+/* Small live indicator of what the microphone hears: a dot above, below or on the line. */
+.pn-meter {
+  position: relative; width: 120px; height: 120px; flex: none; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--surface); overflow: hidden;
+  opacity: .55; transition: opacity .2s, border-color .2s;
+}
+.pn-meter.pn-live { opacity: 1; border-color: var(--muted); }
+.pn-band {
+  position: absolute; left: 0; right: 0; top: 50%; height: 10px; transform: translateY(-50%);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-top: 1px solid var(--accent); border-bottom: 1px solid var(--accent);
+}
+.pn-dot {
+  position: absolute; left: 50%; top: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%;
+  background: var(--fg); opacity: .2; transition: transform .09s linear, opacity .25s, background .1s;
+}
+.pn-dot.pn-on { opacity: 1; }
+.pn-dot.pn-in { background: var(--good); box-shadow: 0 0 0 calc(var(--p, 0) * 8px) color-mix(in srgb, var(--good) 35%, transparent); }
+.pn-offer { min-height: 48px; }
+.pn-offer.pn-off { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) { .pn-dot { transition: opacity .25s; } }

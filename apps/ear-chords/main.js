@@ -41,7 +41,7 @@ const LEVELS = {
 const SUN = '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="13" fill="currentColor"/><g stroke="currentColor" stroke-width="5" stroke-linecap="round"><path d="M32 5v7M32 52v7M5 32h7M52 32h7M13 13l5 5M46 46l5 5M13 51l5-5M46 18l5-5"/></g></svg>';
 const MOON = '<svg viewBox="0 0 64 64" aria-hidden="true"><path fill="currentColor" d="M41 8a25 25 0 1 0 15 33A21 21 0 0 1 41 8z"/></svg>';
 const PLAY = '<svg viewBox="0 0 64 64" width="40" height="40" fill="currentColor" aria-hidden="true"><path d="M22 12v40l32-20z"/></svg>';
-const STEPS = '<svg viewBox="0 0 64 64" width="36" height="36" fill="currentColor" aria-hidden="true"><circle cx="14" cy="46" r="7"/><circle cx="32" cy="32" r="7"/><circle cx="50" cy="18" r="7"/></svg>';
+const STEPS = '<svg viewBox="0 0 64 64" width="36" height="36" fill="currentColor" aria-hidden="true"><circle cx="12" cy="48" r="9"/><circle cx="32" cy="32" r="9"/><circle cx="52" cy="16" r="9"/></svg>';
 
 function build(level, type) {
   const cfg = LEVELS[level];
