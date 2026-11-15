@@ -74,7 +74,6 @@ function setPhase(p, label) {
   phase = p;
   if (pad.dataset.phase !== p) pad.dataset.phase = p;
   if (label !== undefined && pad.textContent !== label) pad.textContent = label;
-  listenBtn.disabled = p === 'count' && false;
   publish();
 }
 
@@ -310,6 +309,17 @@ function publish() {
     result: lastResult, levelUp: !levelBtn.hidden,
   };
 }
+
+/** Test hook: show one pattern of the current level by id. */
+window.__show = (id) => {
+  const swing = id.startsWith('sw:');
+  const bars = id.replace('sw:', '').split('|').map((b) => b.split('-'));
+  const item = { id, bars, swing, meter: level() === 8 ? '6/8' : '4/4' };
+  stop(); gen++; lastItem = id; failedOnce = false;
+  ch = build(level(), item);
+  drawScore(); setPhase('idle', '▶');
+  return true;
+};
 
 game.on('settings', () => { streak = 0; idleRuns = 0; levelBtn.hidden = true; lastResult = null; newChallenge(false); });
 game.on('lang', labels);

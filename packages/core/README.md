@@ -36,7 +36,7 @@ game.tr({en, fr})     // resolve a bilingual object
 game.lang             // 'en' | 'fr'
 game.on('settings', fn); game.on('lang', fn);  // re-render there
 game.set('level', 2)  // change a setting from code
-await game.ready()    // big Start button, unlocks audio
+await game.ready()    // big Start button, unlocks audio. It replaces the stage content: build the game screen after it
 await game.attempt({ skill, correct, ms, level, item, detail, silent }) // log + score +1 if correct + flash + sound
 game.flash(correct, { silent })  // feedback only, no log
 game.setScore(n); game.score; game.say('short toast'); game.h(tag, props, ...children)

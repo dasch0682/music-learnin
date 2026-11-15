@@ -105,7 +105,7 @@ export function createScore(box) {
       const [a, b] = c.meter.split('/');
       el('text', { x: 15, y: Y - 3, 'text-anchor': 'middle', class: 'tr-meter' }, svg).textContent = a;
       el('text', { x: 15, y: Y + 17, 'text-anchor': 'middle', class: 'tr-meter' }, svg).textContent = b;
-      c.barStarts.slice(1).forEach((t) => { const x = xOf(t) - 12; el('line', { x1: x, x2: x, y1: Y - 14, y2: Y + 14, class: 'tr-stroke', 'stroke-width': 1.3 }, svg); });
+      c.barStarts.slice(1).forEach((t) => { const x = xOf(t) - 9.5; el('line', { x1: x, x2: x, y1: Y - 14, y2: Y + 14, class: 'tr-stroke', 'stroke-width': 1.3 }, svg); });
       el('line', { x1: W - 5, x2: W - 5, y1: Y - 14, y2: Y + 14, class: 'tr-stroke', 'stroke-width': 2.4 }, svg);
       drawNotes(svg, c.events, xOf, c.pulse);
       if (c.swing) { // eighths = triplet quarter + eighth

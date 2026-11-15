@@ -14,7 +14,7 @@ export function detectPitch(buf, sampleRate, { minFreq = 65, maxFreq = 1400, min
   const maxLag = Math.min(n >> 1, Math.ceil(sampleRate / minFreq));
   // Normalised square difference function (McLeod pitch method).
   const nsdf = new Float32Array(maxLag + 1);
-  for (let lag = minLag - 1; lag <= maxLag; lag++) {
+  for (let lag = 1; lag <= maxLag; lag++) {
     let acf = 0, div = 0;
     for (let i = 0; i < n - lag; i++) {
       acf += buf[i] * buf[i + lag];
@@ -23,14 +23,14 @@ export function detectPitch(buf, sampleRate, { minFreq = 65, maxFreq = 1400, min
     nsdf[lag] = div ? (2 * acf) / div : 0;
   }
   // Collect the highest peak of each positive lobe after the first zero crossing.
-  let lag = minLag;
+  let lag = 1; // start at lag 1 so the lobe around lag 0 is skipped, never the first true peak
   while (lag < maxLag && nsdf[lag] > 0) lag++;
   const peaks = [];
   while (lag < maxLag) {
     while (lag < maxLag && nsdf[lag] <= 0) lag++;
     let best = lag;
     while (lag < maxLag && nsdf[lag] > 0) { if (nsdf[lag] > nsdf[best]) best = lag; lag++; }
-    if (best > minLag && best < maxLag && nsdf[best] > 0) peaks.push(best);
+    if (best >= minLag && best < maxLag && nsdf[best] > 0) peaks.push(best);
   }
   if (!peaks.length) return { freq: null, clarity: 0, rms };
   const top = Math.max(...peaks.map((p) => nsdf[p]));
@@ -51,6 +51,7 @@ export async function startMic({ onPitch, minFreq, maxFreq } = {}) {
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
   });
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
   const src = ctx.createMediaStreamSource(stream);
   const an = ctx.createAnalyser();
   an.fftSize = 2048;
