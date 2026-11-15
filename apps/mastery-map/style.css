@@ -1,0 +1,18 @@
+.ml-page h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 26px 0 6px; font-weight: 600; }
+.map-grid { display: grid; grid-template-columns: minmax(64px, auto) repeat(8, 1fr); gap: 4px; align-items: center; margin-top: 8px; }
+.map-head { text-align: center; font-size: 12px; color: var(--muted); }
+.map-row { font-size: 13px; color: var(--muted); padding-right: 6px; }
+.map-cell { aspect-ratio: 1; border-radius: 6px; background: color-mix(in srgb, var(--good) calc(var(--v, 0) * 100%), var(--line)); }
+.map-cell.map-none { background: none; }
+.map-cell.map-soon { background: none; border: 1px dashed var(--line); }
+.map-legend { font-size: 13px; color: var(--muted); margin: 14px 0 0; }
+.map-skill { display: grid; grid-template-columns: 26px 1fr 72px; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); color: var(--fg); text-decoration: none; }
+.map-level { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); }
+.map-name { font-size: 15px; }
+.map-penta { color: var(--accent); }
+.map-bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.map-bar i { display: block; height: 100%; background: var(--good); }
+.map-mastered .map-level { background: var(--good); color: var(--bg); border-color: transparent; }
+.map-planned { color: var(--muted); }
+.map-tag { font-size: 12px; color: var(--muted); text-align: right; }
+.ml-page .ml-hint { margin-top: 16px; }

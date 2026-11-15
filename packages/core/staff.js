@@ -5,9 +5,9 @@ const NS = 'http://www.w3.org/2000/svg';
 // bottom = diatonic step of the bottom line (C4 = 28). ref = step of the line the clef glyph sits on.
 export const CLEFS = {
   treble: { glyph: '\u{1D11E}', bottom: 30, ref: 32, size: 4.1, dy: 0.05 },
-  bass: { glyph: '\u{1D122}', bottom: 18, ref: 24, size: 4.1, dy: 0.05 },
-  alto: { glyph: '\u{1D121}', bottom: 24, ref: 28, size: 4.1, dy: 0.05 },
-  tenor: { glyph: '\u{1D121}', bottom: 22, ref: 28, size: 4.1, dy: 0.05 },
+  bass: { glyph: '\u{1D122}', bottom: 18, ref: 24, size: 4.1, dy: 2.5 },
+  alto: { glyph: '\u{1D121}', bottom: 24, ref: 28, size: 4.4, dy: 1.95 },
+  tenor: { glyph: '\u{1D121}', bottom: 22, ref: 28, size: 4.4, dy: 1.95 },
 };
 
 const el = (name, attrs = {}, text) => {
@@ -51,7 +51,7 @@ export function renderStaff(container, { clef = 'treble', notes = [], width = 32
     steps.forEach((sp) => {
       const y = yOf(sp.step);
       g.append(el('ellipse', { cx: x, cy: y, rx: gap * 0.66, ry: gap * 0.47, fill: 'currentColor', transform: `rotate(-20 ${x} ${y})` }));
-      if (sp.acc) g.append(el('text', { x: x - gap * 1.75, y: y + gap * 0.42, 'font-size': gap * 1.7, fill: 'currentColor', 'text-anchor': 'middle', 'font-family': '"Noto Music", system-ui, sans-serif' }, ACC_GLYPH[sp.acc]));
+      if (sp.acc) g.append(el('text', { x: x - gap * 1.8, y: y + gap * 0.55, 'font-size': gap * 2.7, fill: 'currentColor', 'text-anchor': 'middle', 'font-family': '"Noto Music", system-ui, sans-serif' }, ACC_GLYPH[sp.acc]));
     });
     if (note.stem) {
       const up = Math.max(...all) < c.bottom + 4;
