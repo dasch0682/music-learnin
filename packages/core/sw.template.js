@@ -14,9 +14,12 @@ self.addEventListener('fetch', (e) => {
   if (u.origin !== location.origin) return;
   e.respondWith((async () => {
     const c = await caches.open(V);
-    let r = await c.match(e.request, { ignoreSearch: true });
-    if (!r && u.pathname.endsWith('/')) r = await c.match(u.pathname + 'index.html');
+    const opts = { ignoreSearch: true, ignoreVary: true };
+    let r = await c.match(e.request, opts);
+    if (!r && u.pathname.endsWith('/')) r = await c.match(u.pathname + 'index.html', opts);
     if (r) return r;
-    try { return await fetch(e.request); } catch { return (await c.match('./index.html')) || Response.error(); }
+    try { return await fetch(e.request); } catch {
+      return (e.request.mode === 'navigate' && (await c.match('./index.html', opts))) || Response.error();
+    }
   })());
 });

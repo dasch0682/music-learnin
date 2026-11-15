@@ -39,6 +39,6 @@ export default defineConfig({
   base: './',
   publicDir: resolve(__dirname, 'public'),
   resolve: { alias: { '@core': resolve(__dirname, 'packages/core') } },
-  build: { outDir: resolve(__dirname, 'dist'), emptyOutDir: true, rollupOptions: { input } },
+  build: { target: 'es2022', outDir: resolve(__dirname, 'dist'), emptyOutDir: true, rollupOptions: { input } },
   plugins: [serviceWorker()],
 });

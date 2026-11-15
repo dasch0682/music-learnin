@@ -130,7 +130,7 @@ function evalBars(spec) {
   const hits = spec.bars.map((b, i) => landed(spec.start + 4 * i, b.tones));
   const guides = spec.bars.filter((b, i) => b.guides.length && landed(spec.start + 4 * i, b.guides)).length;
   const n = hits.filter(Boolean).length;
-  return { n: tapsIn(spec.start - 0.5, spec.end + 0.5).length, ok: n >= 3, chips: hits.map((on) => ({ kind: 'dot', on })), detail: { hits: hits.map(Number), guides } };
+  return { n: tapsIn(spec.start - 0.5, spec.end - 0.5).length, ok: n >= 3, chips: hits.map((on) => ({ kind: 'dot', on })), detail: { hits: hits.map(Number), guides } };
 }
 
 // ---------- Levels ----------
@@ -187,7 +187,7 @@ const LEVELS = {
       const blue = all.some((x) => pc(x.midi) === 3 && (x.up ?? now) - x.p < 1
         && all.some((y) => y.p > x.p && y.p <= x.p + 2 && pc(y.midi) !== 3));
       const n = hits.filter(Boolean).length;
-      return { n: all.length, ok: n >= Math.ceil(hits.length / 2) && blue, chips: [...hits.map((on) => ({ kind: 'dot', on })), { kind: 'blue', on: blue }], detail: { hits: hits.map(Number), blue } };
+      return { n: tapsIn(spec.start - 0.5, spec.end - 0.5).length, ok: n >= Math.ceil(hits.length / 2) && blue, chips: [...hits.map((on) => ({ kind: 'dot', on })), { kind: 'blue', on: blue }], detail: { hits: hits.map(Number), blue } };
     },
   },
   6: {
