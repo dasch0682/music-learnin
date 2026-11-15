@@ -44,10 +44,11 @@ export async function loadMastery() { return computeMastery(await getAttempts())
 export async function loadItemMastery(skill) { return computeItemMastery(await getAttempts({ skill }), skill); }
 
 /** Pick one entry of `items`, favouring the weakest. stats = Map from computeItemMastery/computeMastery.
- *  keyOf maps an item to its stats key. `avoid` = key of the previous question (never repeated twice). */
+ *  keyOf maps an item to its stats key. `avoid` = key of the previous question. */
 export function pickWeak(items, stats, { keyOf = (x) => x, avoid } = {}) {
-  const pool = items.length > 1 ? items.filter((x) => keyOf(x) !== avoid) : items;
-  const weights = pool.map((x) => 1.15 - (stats?.get(keyOf(x))?.score ?? 0));
+  // Large pools never repeat the previous question. Small pools may (otherwise the answer could be guessed).
+  const pool = items.length > 4 ? items.filter((x) => keyOf(x) !== avoid) : items;
+  const weights = pool.map((x) => (1.15 - (stats?.get(keyOf(x))?.score ?? 0)) * (keyOf(x) === avoid ? 0.6 : 1));
   let r = Math.random() * weights.reduce((a, b) => a + b, 0);
   for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) return pool[i]; }
   return pool[pool.length - 1];
