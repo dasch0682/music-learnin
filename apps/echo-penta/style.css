@@ -1,0 +1,19 @@
+/* Echo: a row of xylophone-like bars, low notes on the left. Colours come from core.css only. */
+.echo-top { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.echo-replay { transition: opacity .2s, transform .1s; }
+.echo-replay:disabled { opacity: .35; cursor: default; }
+
+.echo-dots { display: flex; gap: 8px; min-height: 12px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.echo-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--muted); transition: background .12s, border-color .12s; }
+.echo-dot.echo-on { background: var(--good); border-color: var(--good); }
+
+.echo-pads { width: 100%; max-width: 520px; }
+.echo-pads .ml-pads { grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); gap: 8px; align-items: end; }
+.echo-pads .ml-pad { aspect-ratio: auto; height: calc(200px - var(--h) * 64px); border-radius: 14px; min-width: 0; padding: 0; }
+/* While the app plays, pads stay fully visible so the lit one stands out. */
+.echo-pads .ml-disabled { opacity: 1; }
+.echo-pads .ml-disabled .ml-pad:not(.ml-hit):not(.ml-good):not(.ml-bad):not(.ml-down) { filter: saturate(.55) brightness(.8); }
+.echo-pads .ml-pad.ml-good, .echo-pads .ml-pad.ml-bad, .echo-pads .ml-pad.ml-hint { outline-offset: -4px; }
+
+.echo-next { min-height: 48px; display: flex; align-items: center; justify-content: center; }
+@media (max-height: 560px) { .echo-pads .ml-pad { height: calc(130px - var(--h) * 40px); } }

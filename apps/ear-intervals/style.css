@@ -1,0 +1,10 @@
+/* Intervals by ear */
+.ei-kb { width: calc(100% + 32px); margin: 0 -16px; }
+.ei-kb .ml-keyboard { height: clamp(150px, 30vh, 230px); }
+.ml-key.ei-first { background: var(--accent); border-color: var(--accent); }
+.ei-names { grid-template-columns: repeat(3, 1fr); max-width: 480px; }
+.ei-names.ei-few { grid-template-columns: repeat(2, 1fr); }
+.ei-names .ml-btn { font-size: 15px; line-height: 1.2; padding: 8px 6px; min-height: 58px; }
+.ei-next { visibility: hidden; }
+.ei-next.ei-show { visibility: visible; }
+[hidden] { display: none !important; }

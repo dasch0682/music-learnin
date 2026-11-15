@@ -1,0 +1,17 @@
+/* Chords by ear */
+.ec-top { display: flex; align-items: center; justify-content: center; gap: 20px; padding-left: 84px; }
+.ec-arp {
+  width: 64px; height: 64px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  display: grid; place-items: center; padding: 0;
+}
+.ec-arp:active { transform: scale(.95); }
+.ec-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 440px; }
+.ec-choices .ml-btn { font-size: 18px; line-height: 1.2; min-height: 72px; padding: 8px; }
+.ec-choices .ml-btn:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.ec-choices .ec-icon { display: grid; place-items: center; aspect-ratio: 1; }
+.ec-icon svg { width: 62%; height: 62%; display: block; }
+.ec-icon.ec-bright { color: var(--accent); }
+.ec-icon.ec-dark { color: var(--muted); }
+.ec-icon.ml-right, .ec-icon.ml-wrong { color: var(--bg); }
+.ec-next { visibility: hidden; }
+.ec-next.ec-show { visibility: visible; }
