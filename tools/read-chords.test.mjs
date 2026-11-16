@@ -100,7 +100,9 @@ for (const [scheme, locale] of [['light', 'fr-FR'], ['dark', 'en-US']]) {
           check(await page.evaluate(() => document.querySelectorAll('.rc-choices .ml-wrong:disabled').length === 1), `${tag}: wrong button not marked`);
         }
         await page.click(`.rc-choices button[data-id="${want}"]`);
-        await page.waitForTimeout(1350);
+        const was = JSON.stringify([s.ask, s.notes]);
+        await page.waitForFunction((w) => { const t = window.__test.state(); return JSON.stringify([t.ask, t.notes]) !== w; }, was, { timeout: 5000 });
+        await page.waitForTimeout(100);
         const mine = (await attempts()).slice(before);
         const item = ask === 'root' ? 'root' : ask === 'full' ? 'full' : ask === 'inv' ? want : want;
         check(mine.length === 1 && mine[0].ok === !wrongFirst && mine[0].level === level && mine[0].item === item && mine[0].skill === 'read.chords', `${tag}: attempts ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.skill]))}`);

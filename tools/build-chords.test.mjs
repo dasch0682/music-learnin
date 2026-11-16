@@ -12,7 +12,7 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
 const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'build-chords').sort((x, y) => x.t - y.t)); }; }));
-const state = () => page.evaluate(() => window.__test.state());
+const state = () => page.evaluate(() => window.__test?.state()).catch(() => null);
 const until = async (fn, ms = 9000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = await fn(); if (v) return v; await page.waitForTimeout(60); } return null; };
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -60,7 +60,7 @@ async function plan(s) {
   const L = s.level;
   const [id, flag] = s.item.split(':');
   check(s.id === id, `L${L}: id ${s.id} vs item ${s.item}`);
-  check(s.notes.every((m) => m >= 55 && m <= 84), `L${L} ${s.item}: notes out of range ${s.notes}`);
+  check(s.notes.every((m) => m >= 55 && m <= 84) && Math.min(...s.notes) <= 72, `L${L} ${s.item}: notes out of range ${s.notes}`);
   const [w0, w1] = s.window;
   check(s.notes.every((m) => m >= w0 && m <= w1) && isWhite(w0) && isWhite(w1), `L${L} ${s.item}: notes outside the keyboard window ${s.window}`);
   const whites = await page.locator('.ml-white').count();
@@ -120,6 +120,7 @@ for (let level = 1; level <= 6; level++) {
     check(!!s, `L${level} round ${round}: no question`);
     if (!s) break;
     seen.add(s.item + '@' + s.mode);
+    if (process.env.DEBUG) console.log('round', level, round, s.item, s.mode);
     if (round > 0) check(s.item + '@' + s.mode === queue[round - 1], `L${level}: asked ${s.item}@${s.mode}, forced ${queue[round - 1]}`);
     const p = await plan(s);
     const before = (await attempts()).length;

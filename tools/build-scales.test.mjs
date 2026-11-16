@@ -12,7 +12,7 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
 const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'build-scales').sort((x, y) => x.t - y.t)); }; }));
-const state = () => page.evaluate(() => window.__test.state());
+const state = () => page.evaluate(() => window.__test?.state()).catch(() => null);
 const until = async (fn, ms = 9000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = await fn(); if (v) return v; await page.waitForTimeout(60); } return null; };
 
 // ---- theory, written independently of the app: semitones above the tonic ----

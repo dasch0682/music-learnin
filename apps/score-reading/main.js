@@ -135,7 +135,7 @@ function makeQuestion(level, stats, last, intro) {
   } else if (level === 5) {
     q.kind = 'motif';
     const n = 3 + rand(2);
-    for (let tries = 0; tries < 200; tries++) {
+    while (!q.source) {
       const steps = [28 + rand(11)];
       while (steps.length < n) {
         const s = steps.at(-1) + pick([-2, -1, 1, 2]);

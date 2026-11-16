@@ -1,0 +1,32 @@
+/* Harmony lab */
+.ml-stage:has(.hl-row) { gap: 14px; }
+.hl-prompt { min-height: 1.4em; font-size: 24px; }
+.hl-staff { width: 100%; max-width: 340px; }
+.hl-row { display: flex; gap: 8px; width: 100%; max-width: 440px; align-items: stretch; }
+.hl-slot { flex: 1 1 0; min-width: 0; min-height: 88px; padding: 6px 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.hl-slot.hl-empty { border-style: dashed; background: transparent; }
+.hl-slot.hl-given { background: var(--surface); }
+.hl-slot.hl-active { border-color: var(--accent); border-width: 2px; }
+.hl-slot.hl-locked { border-color: var(--good); border-width: 2px; }
+.hl-slot.hl-wrong { border-color: var(--bad); border-width: 2px; animation: hl-shake .3s; }
+@keyframes hl-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+.hl-goal { flex: 0 0 44px; display: grid; place-items: center; color: var(--muted); }
+.hl-goal svg { width: 44px; height: 44px; }
+.hl-tray { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; width: 100%; max-width: 440px; }
+.hl-block { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 88px; padding: 6px 4px; }
+.hl-block.hl-used { opacity: .45; }
+.hl-shape { display: block; width: 34px; height: 34px; }
+.hl-shape svg { width: 100%; height: 100%; display: block; }
+.hl-rest { color: var(--good); }
+.hl-move { color: var(--accent); }
+.hl-tension { color: var(--bad); }
+.hl-txt { display: flex; flex-direction: column; align-items: center; font-size: 13px; line-height: 1.15; color: var(--fg); max-width: 100%; overflow-wrap: anywhere; text-align: center; }
+.hl-txt b { font-size: 18px; }
+.hl-txt small { font-size: 12px; color: var(--muted); }
+small.hl-txt { color: var(--muted); }
+.hl-big { font-size: 20px; font-weight: 600; }
+.hl-bar { display: flex; gap: 14px; justify-content: center; }
+.hl-play, .hl-ok { width: 72px; min-height: 52px; font-size: 22px; }
+.hl-ok:disabled { opacity: .35; }
+.hl-next { visibility: hidden; }
+.hl-next.hl-show { visibility: visible; }

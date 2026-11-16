@@ -200,12 +200,10 @@ function render() {
   tray.replaceChildren(...q.blocks.map((b) => {
     const el = h('button', { className: 'ml-btn hl-block' }, ...faceOf(b));
     el.dataset.id = b.id;
-    if (q.mode === 'place' && q.slots.some((s) => s.placed === b)) el.classList.add('hl-used');
     el.onclick = () => tapBlock(b);
     return el;
   }));
-  bar.style.display = q.mode === 'label' ? 'none' : '';
-  replay.style.display = q.mode === 'label' ? '' : '';
+  okBtn.style.display = q.mode === 'label' ? 'none' : '';
   okBtn.disabled = locked || q.mode !== 'place' && q.mode !== 'scale' || q.slots.some((s) => !s.given && s.status !== 'locked' && !s.placed);
 }
 
@@ -221,7 +219,7 @@ function genGoal(level, item) {
   const goal = item.slice(5);
   const V = level === 1 ? 'V7' : 'V';
   const T = {
-    settled: [['I', 'IV', V], ['I', 'V', V].slice(0, 3).map((x, i) => (i === 1 ? 'IV' : x)), ['IV', 'IV', V], ['I', 'vi', V]],
+    settled: [['I', 'IV', V], ['I', 'I', V], ['IV', 'IV', V], ['I', 'vi', V]],
     hanging: [['I', 'IV', 'I'], ['I', 'I', 'IV'], ['I', 'V', 'IV'], ['I', 'IV', 'IV']],
   };
   const tpl = pick(T[goal].filter((t) => level === 1 || !t.includes('vi')));
@@ -235,7 +233,6 @@ const DEG = [0, 2, 4, 5, 7, 9, 11];
 function genMelody(level) {
   const key = pick(MAJ_KEYS.filter((k) => ['C', 'G', 'F'].includes(k.id)));
   const goal = pick(['settled', 'hanging']);
-  const inChord = { I: [0, 2, 4], IV: [3, 5, 0], V: [4, 6, 1] };
   const first = [0, 2, 4], end = goal === 'settled' ? [0, 2, 4, 7] : [4, 6, 1];
   let d;
   for (let tries = 0; tries < 200; tries++) {
@@ -289,11 +286,11 @@ function genSecdom(level) {
 }
 
 function genIiVI(level, item) {
-  const key = MAJ_KEYS.find((k) => k.id === item.slice(4));
+  const key = MAJ_KEYS.find((k) => k.id === item.slice(5));
   const right = ['ii7', 'V7', 'Imaj7'];
   const others = shuffle(['iii7', 'vi7', 'IVmaj7', 'bII7', 'iv7', 'bVII7']).slice(0, 3);
   const slots = right.map((id) => ({ given: null, valid: new Set([id]), placed: null, note: null, status: null }));
-  return base(level, { key, slots, style: 'sym', shapes: false, prompt: () => nm(LETTERS.en[key.letter] + (key.sig < 0 && key.id.length > 1 ? '♭' : '')), blocks: [...right, ...others].map((id) => chordBlock(chordIn(id, key))) });
+  return base(level, { key, slots, style: 'sym', shapes: false, prompt: () => nm(spellRoot(key.pc, key.letter)), blocks: [...right, ...others].map((id) => chordBlock(chordIn(id, key))) });
 }
 
 // Five-note scales that fit a chord: every note belongs to the mode of the chord, minus the notes
@@ -397,8 +394,6 @@ function tapBlock(b) {
   let i = q.active;
   if (!q.slots[i] || q.slots[i].given || q.slots[i].status === 'locked') i = firstOpen();
   if (i < 0) return;
-  // A block already placed moves to the active slot.
-  q.slots.forEach((s) => { if (s.placed === b) s.placed = null; });
   q.slots[i].placed = b;
   q.active = i;
   const n = q.slots.findIndex((s, k) => k > i && !s.given && !s.placed && s.status !== 'locked');

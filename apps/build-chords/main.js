@@ -10,7 +10,7 @@ import './style.css';
 const L = (en, fr) => ({ en, fr });
 const MAX_LEVEL = 6;
 const STREAK_UP = 6;
-const LOW = 55, HIGH = 84; // notes are kept between G3 and C6; the keyboard window (11 white keys) is chosen around them
+const LOW = 55, HIGH = 84, LOWEST_MAX = 72; // notes are kept between G3 and C6; the keyboard window (11 white keys) is chosen around them
 const game = createGame({
   id: 'build-chords',
   title: L('Build the chord', 'Construis l’accord'),
@@ -99,7 +99,7 @@ function makeQuestion(item, level, forcedMode) {
     const roots = [];
     for (let r = LOW; r <= HIGH; r++) {
       const t = r + dir * semi;
-      if (t < LOW || t > HIGH || (cfg.white && !(isNatural(r) && isNatural(t)))) continue;
+      if (t < LOW || t > HIGH || Math.min(r, t) > LOWEST_MAX || (cfg.white && !(isNatural(r) && isNatural(t)))) continue;
       roots.push(r);
     }
     q.root = pick(roots);
@@ -128,7 +128,7 @@ function makeQuestion(item, level, forcedMode) {
     const roots = [];
     for (let r = LOW - 12; r <= HIGH; r++) {
       const ns = voicing(r, id, inv);
-      if (ns[0] >= LOW && ns[ns.length - 1] <= HIGH) roots.push(r);
+      if (ns[0] >= LOW && ns[0] <= LOWEST_MAX && ns[ns.length - 1] <= HIGH) roots.push(r);
     }
     q.root = pick(roots);
     q.inv = inv;
