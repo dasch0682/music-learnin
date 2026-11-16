@@ -106,7 +106,7 @@ for (let level = 1; level <= 6; level++) {
       check(await page.locator('.ml-white').count() <= 12, `${where}: too many keys`);
       await shot();
       if (round === 0) {
-        await page.locator(`.ml-key[data-midi="${s.midi === 64 ? 65 : s.midi + 1}"]`).dispatchEvent('pointerdown', { pointerId: 1 });
+        await page.locator(`.ml-key[data-midi="${s.midi >= 76 ? s.midi - 1 : s.midi + 1}"]`).dispatchEvent('pointerdown', { pointerId: 1 });
         await page.waitForTimeout(200);
         if (dir) await page.screenshot({ path: `${dir}/ks-${level}-wrong.png` });
       }

@@ -12,7 +12,7 @@
 @keyframes hl-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 .hl-goal { flex: 0 0 44px; display: grid; place-items: center; color: var(--muted); }
 .hl-goal svg { width: 44px; height: 44px; }
-.hl-tray { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; width: 100%; max-width: 440px; }
+.hl-tray { display: grid; grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); gap: 10px; width: 100%; max-width: 440px; }
 .hl-block { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 88px; padding: 6px 4px; }
 .hl-block.hl-used { opacity: .45; }
 .hl-shape { display: block; width: 34px; height: 34px; }

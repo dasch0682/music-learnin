@@ -15,7 +15,7 @@
 .cf-found .cf-label { fill: var(--bg); }
 .cf-wrong path { fill: var(--bad); }
 .cf-wrong .cf-label { fill: var(--bg); }
-.cf-prompt { min-height: 1.4em; }
+.cf-prompt { min-height: 1.4em; font-size: 26px; }
 .cf-staff { width: 100%; max-width: 250px; }
 .cf-choices { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; width: 100%; max-width: 440px; }
 .cf-choices:empty { display: none; }
