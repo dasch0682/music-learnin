@@ -17,3 +17,5 @@
 .tv-undo:disabled { opacity: .35; }
 .tv-next { visibility: hidden; }
 .tv-next.tv-show { visibility: visible; }
+.tv-row .ml-round { width: 64px; height: 64px; flex: none; }
+.tv-row { gap: 12px; max-width: 100%; }
