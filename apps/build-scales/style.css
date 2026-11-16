@@ -1,0 +1,30 @@
+/* Build the scale. Colours come from the core variables only. */
+.ml-stage { gap: 14px; }
+.bs-head { display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 96px; justify-content: center; }
+.bs-text { text-align: center; }
+.bs-title { margin: 0; font-size: 26px; font-weight: 600; min-height: 1.2em; }
+.bs-title:empty { display: none; }
+.bs-replay.bs-small { width: 64px; height: 64px; }
+.bs-stripbox { width: 100%; min-height: 44px; }
+.bs-strip { display: flex; gap: 3px; width: 100%; }
+.bs-g {
+  flex-basis: 0; min-width: 0; height: 44px; display: grid; place-items: center; border-radius: 8px;
+  font-size: 11px; white-space: nowrap; overflow: hidden; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+}
+.bs-g1 { background: var(--surface); }
+.bs-g2 { background: color-mix(in srgb, var(--accent) 55%, var(--bg)); border-color: transparent; color: var(--fg); }
+.bs-g3 { background: var(--accent); border-color: transparent; color: var(--accent-fg); }
+.bs-next { visibility: hidden; }
+.bs-next.bs-show { visibility: visible; }
+
+/* Latched keys, fixed lit keys, the marked home key */
+.ml-key.bs-on { background: var(--accent); }
+.ml-key.bs-lit { background: color-mix(in srgb, var(--accent) 38%, #fbfaf6); }
+.ml-black.bs-lit { background: color-mix(in srgb, var(--accent) 60%, #23262c); }
+.ml-key.bs-bad { background: var(--bad); }
+.ml-key.bs-home::after {
+  content: ''; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 3px solid var(--bg); box-sizing: content-box;
+  margin-bottom: 2px;
+}
+.ml-key.bs-on.bs-home::after { background: var(--bg); border-color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .ml-key { transition: none; } }

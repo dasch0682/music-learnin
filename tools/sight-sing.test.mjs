@@ -52,10 +52,10 @@ function theory(s, level, voice) {
   }
   if (level === 1) check(n.length >= 2 && n.length <= 3 && mod(m[0], 12) === 0, `${tag}: must be 2-3 notes from the tonic`);
   if (level === 2) check(n.length >= 3 && n.length <= 4, `${tag}: must be 3-4 notes`);
-  if (level === 3) check(n.length >= 3 && n.length <= 4 && s.keySig === 0 && maxLeap <= 3, `${tag}: steps and thirds in C (${n.length} notes, leap ${maxLeap})`);
+  if (level === 3) check(n.length >= 3 && n.length <= 4 && s.keySig === 0 && maxLeap <= 2, `${tag}: steps and thirds in C (${n.length} notes, leap ${maxLeap})`);
   if (level === 4) {
     check(n.length === 5 && s.keySig === 0, `${tag}: 5 notes in C`);
-    check(steps.some((v, i) => i && Math.abs(v - steps[i - 1]) === 5), `${tag}: no leap to a fifth`);
+    check(steps.some((v, i) => i && Math.abs(v - steps[i - 1]) === 4), `${tag}: no leap to a fifth`);
   }
   if (level === 5) check(n.length === 5 && [1, -1, 2, -2].includes(s.keySig), `${tag}: 5 notes in G, F, D or Bb`);
   if (level === 6) {
@@ -72,6 +72,7 @@ for (let level = 1; level <= 6; level++) {
   const before = (await attempts()).length;
   // The first note is played by the app: nothing sung into the microphone counts meanwhile.
   let s0 = await state();
+  for (let i = 0; i < 50 && !s0.notes; i++) { await page.waitForTimeout(100); s0 = await state(); }
   if (!s0.listening) {
     await feed(s0.notes[0].midi + 3, 800);
     s0 = await state();

@@ -1,0 +1,17 @@
+/* Write the tune */
+.md-staff { width: 100%; display: flex; justify-content: center; }
+.md-dots { display: flex; gap: 8px; justify-content: center; min-height: 12px; }
+.md-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--muted); box-sizing: border-box; }
+.md-dot.md-on { background: var(--fg); border-color: var(--fg); }
+.md-dot.md-ok { background: var(--good); border-color: var(--good); }
+.md-dot.md-bad { background: var(--bad); border-color: var(--bad); }
+.md-kb { width: 100%; max-width: 440px; }
+.md-row { display: flex; align-items: center; justify-content: center; gap: 24px; }
+.md-undo {
+  width: 52px; height: 52px; flex: none; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  display: grid; place-items: center; padding: 0;
+}
+.md-undo:active { transform: scale(.95); }
+.md-undo:disabled { opacity: .35; }
+.md-next { visibility: hidden; }
+.md-next.md-show { visibility: visible; }

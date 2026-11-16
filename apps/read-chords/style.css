@@ -1,0 +1,14 @@
+/* Read the chord */
+.rc-staff { width: 100%; max-width: 420px; }
+.rc-hint { min-height: 1.4em; margin: 0; }
+.rc-choices { display: grid; gap: 10px; width: 100%; max-width: 440px; }
+.rc-two { grid-template-columns: 1fr 1fr; }
+.rc-column { grid-template-columns: 1fr; }
+.rc-seven { grid-template-columns: repeat(4, 1fr); }
+.rc-choices .ml-btn { font-size: 18px; line-height: 1.2; min-height: 64px; padding: 8px 6px; }
+.rc-choices .ml-btn.rc-sym { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.rc-choices .rc-sym b { font-size: 22px; line-height: 1; }
+.rc-choices .rc-sym span { font-size: 13px; color: var(--muted); }
+.rc-choices .ml-right, .rc-choices .ml-wrong, .rc-choices .ml-right span, .rc-choices .ml-wrong span { color: var(--bg); }
+.rc-next { visibility: hidden; }
+.rc-next.rc-show { visibility: visible; }

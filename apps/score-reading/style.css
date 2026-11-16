@@ -1,0 +1,16 @@
+/* Transpose. Colours come from the core variables only. */
+.sr-label { min-height: 1.4em; margin: 0; font-size: 18px; }
+.sr-gap { margin: 0; }
+.sr-staves { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 6px; }
+.sr-staff { width: 100%; border-radius: var(--radius); border: 2px solid transparent; }
+.sr-marked { border-color: var(--accent); }
+.sr-answer { width: 100%; display: flex; flex-direction: column; align-items: center; }
+.sr-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 440px; }
+.sr-choices .ml-btn { min-height: 100px; padding: 4px 6px; color: var(--fg); }
+.sr-choices .ml-btn.ml-right, .sr-choices .ml-btn.ml-wrong { color: var(--bg); }
+.sr-choices .ml-staff { color: inherit; pointer-events: none; }
+.sr-replay { align-self: center; }
+.sr-replay[hidden] { display: none; }
+.sr-offer { min-height: 48px; }
+.sr-offer.sr-off { visibility: hidden; }
+.sr-label[hidden], .sr-gap[hidden] { display: none; }

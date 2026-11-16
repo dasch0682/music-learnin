@@ -99,7 +99,9 @@ async function load(level, extra = {}) {
 const overflow = () => page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
 
 await page.goto(base);
+const ONLY = process.env.LEVELS ? process.env.LEVELS.split(',').map(Number) : null;
 for (let level = 1; level <= 9; level++) {
+  if (ONLY && !ONLY.includes(level)) continue;
   await load(level);
   const before = (await attempts()).length;
   await startIfIdle();
@@ -124,6 +126,8 @@ for (let level = 1; level <= 9; level++) {
   check(!(await overflow()), `L${level}: overflow`);
   console.log(`L${level}`, mine.map((a) => `${a.skill} ${a.item} ${a.ok}`).join(' | '));
 }
+
+if (ONLY) { await browser.close(); console.log(failed ? `${failed} failure(s)` : 'all good'); process.exit(failed ? 1 : 0); }
 
 // Level 9, one hand-picked pattern per meter and grouping.
 await load(9);
