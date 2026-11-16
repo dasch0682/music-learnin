@@ -16,7 +16,7 @@ const listening = async () => { for (let i = 0; i < 200; i++) { const s = await 
 const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'second-voice').sort((x, y) => x.t - y.t)); }; }));
 
 await page.goto(base);
-for (let level = 1; level <= 8; level++) {
+for (let level = 1; level <= 10; level++) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:second-voice', JSON.stringify({ level: l, voice: 'child', tolerance: 50, phones: false })), level);
   await page.reload();
   await page.click('.ml-start');
@@ -24,7 +24,7 @@ for (let level = 1; level <= 8; level++) {
   const before = (await attempts()).length;
   let s = await listening();
   const item = s.item;
-  if (dir && [1, 3, 6, 8].includes(level)) await page.screenshot({ path: `${dir}/sv-${level}.png` });
+  if (dir && [7, 9].includes(level)) await page.screenshot({ path: `${dir}/sv-${level}.png` });
   // 1. The app's own note must not count as a wrong note (speaker leak).
   await feed(s.steps[0].other[0], 2600);
   s = await state();

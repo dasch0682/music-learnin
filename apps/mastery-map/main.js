@@ -11,7 +11,7 @@ const T = {
   soon: { en: 'soon', fr: 'bientôt' },
   level: { en: 'Level', fr: 'Niveau' },
   thread: { en: 'Five-note thread', fr: 'Fil des cinq notes' },
-  voice: { en: 'Second-voice thread', fr: 'Fil de la deuxième voix' },
+  voice: { en: 'Tension-and-release thread', fr: 'Fil tension et détente' },
   empty: { en: 'Play a game: your progress will appear here.', fr: 'Joue à un jeu : ta progression apparaîtra ici.' },
 };
 

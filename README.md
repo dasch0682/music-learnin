@@ -43,4 +43,4 @@ Deploy the content of `dist/` at the root of the site. Paths are relative, so a 
 Two ideas come back at every level, first by ear and by voice, later with their names:
 
 - the five-note (pentatonic) scale: `echo-penta`, `penta-jam`, `sing-match` (skills flagged `penta`);
-- the second voice, tension and release: `second-voice` (skills flagged `voice`).
+- tension and release, from one held note to cadences and jazz guide tones: `second-voice`, `ear-cadences` (skills flagged `voice`).

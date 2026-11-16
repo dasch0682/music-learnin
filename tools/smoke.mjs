@@ -4,7 +4,7 @@
 import { chromium } from 'playwright-core';
 const base = `http://localhost:${process.env.PORT || 4173}`;
 const dir = process.argv[2];
-const pages = ['', 'mastery-map/', 'find-a-note/', 'high-low/', 'echo-penta/', 'ear-intervals/', 'ear-chords/', 'sing-match/', 'second-voice/', 'penta-jam/', 'play-the-note/', 'tap-rhythm/'];
+const pages = ['', 'mastery-map/', 'find-a-note/', 'high-low/', 'echo-penta/', 'ear-intervals/', 'ear-chords/', 'ear-cadences/', 'sing-match/', 'second-voice/', 'penta-jam/', 'play-the-note/', 'tap-rhythm/'];
 const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
 let failed = 0;
 const fail = (msg) => { failed++; console.log('FAIL', msg); };

@@ -9,7 +9,7 @@ import { loadItemMastery, pickWeak } from '@core/mastery.js';
 import './style.css';
 
 const L = (en, fr) => ({ en, fr });
-const MAX_LEVEL = 8;
+const MAX_LEVEL = 10;
 const game = createGame({
   id: 'second-voice',
   title: L('Second voice', 'Deuxième voix'),
@@ -22,6 +22,13 @@ const game = createGame({
     tension: L('tension', 'tension'),
     rest: L('release', 'détente'),
     phonesTip: L('Easier with headphones', 'Plus facile avec un casque'),
+    parfaite: L('Perfect cadence', 'Cadence parfaite'),
+    plagale: L('Plagal cadence', 'Cadence plagale'),
+    rompue: L('Deceptive cadence', 'Cadence rompue'),
+    demi: L('Half cadence', 'Demi-cadence'),
+    cycle: L('Cycle of fifths', 'Cycle des quintes'),
+    tritone: L('Tritone substitution', 'Substitution tritonique'),
+    cliche: L('Line cliché', 'Ligne cliché'),
   },
   settings: [
     { key: 'level', label: L('Level', 'Niveau'), type: 'select', default: 1, options: [
@@ -31,8 +38,10 @@ const game = createGame({
       { value: 4, label: L('4 · Find the release by ear', '4 · Trouve la détente à l’oreille') },
       { value: 5, label: L('5 · Sing a third above', '5 · Chante à la tierce') },
       { value: 6, label: L('6 · Follow three chords', '6 · Suis trois accords') },
-      { value: 7, label: L('7 · Guide tones on ii–V–I', '7 · Notes guides sur ii–V–I') },
-      { value: 8, label: L('8 · Improvise a second voice', '8 · Improvise une deuxième voix') },
+      { value: 7, label: L('7 · Sing through the cadences', '7 · Traverse les cadences') },
+      { value: 8, label: L('8 · Guide tones on ii–V–I', '8 · Notes guides sur ii–V–I') },
+      { value: 9, label: L('9 · Advanced patterns', '9 · Motifs avancés') },
+      { value: 10, label: L('10 · Improvise a second voice', '10 · Improvise une deuxième voix') },
     ] },
     { key: 'voice', label: L('Voice', 'Voix'), type: 'select', default: 'child', options: [
       { value: 'child', label: L('Child', 'Enfant') },
@@ -51,7 +60,7 @@ const game = createGame({
 const { h } = game;
 
 const VOICES = { child: [60, 69], high: [57, 74], medium: [48, 62], low: [43, 57] };
-const SKILL = { 1: 'sing.voice.hold', 2: 'sing.voice.hold', 3: 'sing.voice.tension', 4: 'sing.voice.tension', 5: 'sing.voice.thirds', 6: 'sing.voice.leading', 7: 'sing.voice.guide', 8: 'sing.voice.free' };
+const SKILL = { 1: 'sing.voice.hold', 2: 'sing.voice.hold', 3: 'sing.voice.tension', 4: 'sing.voice.tension', 5: 'sing.voice.thirds', 6: 'sing.voice.leading', 7: 'sing.voice.cadence', 8: 'sing.voice.guide', 9: 'sing.voice.patterns', 10: 'sing.voice.free' };
 const MAJOR = [0, 2, 4, 5, 7, 9, 11];
 const PENTA = [0, 2, 4, 7, 9, 12];
 const CONSONANT = [0, 3, 4, 7, 8, 9]; // against the bass, as pitch classes
@@ -64,6 +73,10 @@ const CH = {
   vi: { root: 9, tones: [9, 0, 4], sym: 'm' }, ii7: { root: 2, tones: [2, 5, 9, 0], sym: 'm7' },
   Imaj7: { root: 0, tones: [0, 4, 7, 11], sym: 'maj7' }, vi7: { root: 9, tones: [9, 0, 4, 7], sym: 'm7' },
   IVmaj7: { root: 5, tones: [5, 9, 0, 4], sym: 'maj7' },
+  iii7: { root: 4, tones: [4, 7, 11, 2], sym: 'm7' }, VI7: { root: 9, tones: [9, 1, 4, 7], sym: '7' },
+  bII7: { root: 1, tones: [1, 5, 8, 11], sym: '7', flat: true },
+  im: { root: 0, tones: [0, 3, 7], sym: 'm' }, imM7: { root: 0, tones: [0, 3, 7, 11], sym: 'm(maj7)' },
+  im7: { root: 0, tones: [0, 3, 7, 10], sym: 'm7' }, im6: { root: 0, tones: [0, 3, 7, 9], sym: 'm6' },
 };
 // One sung line over chords. tense = indexes of the steps that ask to be resolved.
 const LINES = {
@@ -72,9 +85,25 @@ const LINES = {
     '3-4-4-3': { chords: ['I', 'IV', 'V7', 'I'], line: [4, 5, 5, 4], tense: [2] },
     '5-6-5-5': { chords: ['I', 'IV', 'V', 'I'], line: [7, 9, 7, 7], tense: [] },
   },
+  // Cadences: the same two voices (leading tone up, seventh down) meet different endings.
   7: {
+    'parfaite:7-8': { name: 'parfaite', chords: ['IV', 'V7', 'I'], line: [0, -1, 0], tense: [1] },
+    'parfaite:4-3': { name: 'parfaite', chords: ['IV', 'V7', 'I'], line: [5, 5, 4], tense: [1] },
+    'plagale:6-5': { name: 'plagale', chords: ['I', 'IV', 'I'], line: [7, 9, 7], tense: [] },
+    'plagale:4-3': { name: 'plagale', chords: ['I', 'IV', 'I'], line: [4, 5, 4], tense: [] },
+    'rompue:7-8': { name: 'rompue', chords: ['IV', 'V7', 'vi'], line: [0, -1, 0], tense: [1] },
+    'demi:8-7': { name: 'demi', chords: ['I', 'IV', 'V'], line: [0, 0, -1], tense: [2] },
+  },
+  8: {
     '3-7-3': { chords: ['ii7', 'V7', 'Imaj7'], line: [5, 5, 4], tense: [1] },
     '7-3-7': { chords: ['ii7', 'V7', 'Imaj7'], line: [0, -1, -1], tense: [0] },
+  },
+  9: {
+    'cycle:3-7': { name: 'cycle', chords: ['iii7', 'VI7', 'ii7', 'V7', 'Imaj7'], line: [7, 7, 5, 5, 4], tense: [1, 3] },
+    'cycle:7-3': { name: 'cycle', chords: ['iii7', 'VI7', 'ii7', 'V7', 'Imaj7'], line: [2, 1, 0, -1, -1], tense: [0, 2] },
+    'tritone:3-7': { name: 'tritone', chords: ['ii7', 'bII7', 'Imaj7'], line: [5, 5, 4], tense: [1] },
+    'tritone:7-3': { name: 'tritone', chords: ['ii7', 'bII7', 'Imaj7'], line: [0, -1, -1], tense: [0] },
+    cliche: { name: 'cliche', chords: ['im', 'imM7', 'im7', 'im6'], line: [0, -1, -2, -3], tense: [1, 2] },
   },
 };
 const PROGS = { 'I-vi-IV-V': ['Imaj7', 'vi7', 'IVmaj7', 'V7'], 'ii-V-I': ['ii7', 'V7', 'Imaj7'] };
@@ -141,8 +170,9 @@ function render() {
   dots.replaceChildren(...r.steps.map((s, i) => h('span', { className: (i < r.idx ? 'sv-done' : i === r.idx ? 'sv-now' : '') + (s.kind === 'tension' ? ' sv-t' : '') })));
   // Names appear with the levels: nothing at first, then tension / release, then the chords.
   const parts = [];
-  if (r.level >= 6 && st.chord) parts.push(noteName(r.tonic + st.chord.root, { lang: game.lang, pref: r.pref }) + st.chord.sym);
-  if (r.level >= 3 && r.level <= 7) parts.push(game.t(st.kind));
+  if (r.name) parts.push(game.t(r.name));
+  if (r.level >= 6 && st.chord) parts.push(noteName(r.tonic + st.chord.root, { lang: game.lang, pref: st.chord.flat ? 'flat' : r.pref }) + st.chord.sym);
+  if (r.level >= 3 && r.level <= 9) parts.push(game.t(st.kind));
   hint.textContent = parts.join(' · ');
   band.classList.toggle('sv-tension', st.kind === 'tension');
   band.classList.toggle('sv-hidden', !st.show || r.done);
@@ -225,7 +255,7 @@ async function build(level) {
   const skill = SKILL[level];
   const stats = await loadItemMastery(skill);
   const step = (other, targets, o = {}) => ({ other, targets: [].concat(targets), kind: o.kind || 'rest', show: o.show !== false, chord: o.chord || null });
-  let item, steps, demo = 'first';
+  let item, steps, name = null, demo = 'first';
   if (level <= 2) {
     item = level === 1 ? 'tonic' : pickWeak(['fifth', 'third'], stats, { avoid: last });
     const mine = { tonic: 0, fifth: 7, third: 4 }[item];
@@ -254,9 +284,10 @@ async function build(level) {
       steps.push(step([MAJOR[d]], MAJOR[d + 2]));
       d = pick([d - 1, d + 1].filter((j) => j >= 0 && j <= 3));
     }
-  } else if (level <= 7) {
+  } else if (level <= 9) {
     item = pickWeak(Object.keys(LINES[level]), stats, { avoid: last });
     const def = LINES[level][item];
+    name = def.name || null;
     steps = def.chords.map((c, i) => step(chordOther(CH[c], def.line[i]), def.line[i], { kind: def.tense.includes(i) ? 'tension' : 'rest', chord: CH[c] }));
   } else {
     item = pickWeak(Object.keys(PROGS), stats, { avoid: last });
@@ -277,7 +308,7 @@ async function build(level) {
   const tonic = keys.length ? pick(keys) : Math.round((lo + hi) / 2 - (min + max) / 2);
   for (const s of steps) { s.targets = s.targets.map((x) => tonic + x); s.other = place(s.other.map((x) => tonic + x)); }
   return {
-    level, skill, item, steps, demo, tonic, center: tonic + (min + max) / 2,
+    level, skill, item, name, steps, demo, tonic, center: tonic + (min + max) / 2,
     pref: [1, 3, 5, 8, 10].includes(mod(tonic, 12)) ? 'flat' : 'sharp',
     idx: 0, sounding: [], wrongLogged: false, listening: false, playing: false, done: false, t0: 0, stepAt: 0,
   };

@@ -25,7 +25,7 @@ export const LEVELS = [
   { id: 8, en: 'Mastery', fr: 'Maîtrise' },
 ];
 
-// voice = part of the second-voice thread (tension and release, from one held note to jazz guide tones).
+// voice = part of the tension-and-release thread (second voice and cadences, from one held note to jazz).
 const s = (id, level, game, en, fr, penta = false, voice = false) => ({ id, domain: id.split('.')[0], level, game, en, fr, penta, voice });
 const v = (id, level, game, en, fr) => s(id, level, game, en, fr, false, true);
 
@@ -41,6 +41,10 @@ export const SKILLS = [
   s('listen.chords.triads', 3, 'ear-chords', 'Major or minor chord', 'Accord majeur ou mineur'),
   s('listen.chords.triads4', 4, 'ear-chords', 'Four triad types', 'Quatre types d’accords de trois sons'),
   s('listen.chords.sevenths', 6, 'ear-chords', 'Seventh chords', 'Accords de septième'),
+  v('listen.cadence.feel', 2, 'ear-cadences', 'Settled or hanging ending', 'Fin posée ou suspendue'),
+  v('listen.cadence.basic', 3, 'ear-cadences', 'Perfect, half and plagal cadences', 'Cadences parfaite, demi et plagale'),
+  v('listen.cadence.all', 5, 'ear-cadences', 'Four cadences, major and minor', 'Quatre cadences, majeur et mineur'),
+  v('listen.cadence.advanced', 7, 'ear-cadences', 'Jazz and modal endings', 'Fins jazz et modales'),
   s('listen.scales', 5, null, 'Scales and modes by ear', 'Gammes et modes à l’oreille'),
   s('listen.progressions', 6, null, 'Chord progressions', 'Enchaînements d’accords'),
   s('listen.dictation', 7, null, 'Melodic dictation', 'Dictée mélodique'),
@@ -55,7 +59,9 @@ export const SKILLS = [
   v('sing.voice.tension', 3, 'second-voice', 'Tension and release', 'Tension et détente'),
   v('sing.voice.thirds', 4, 'second-voice', 'Sing in thirds', 'Chanter à la tierce'),
   v('sing.voice.leading', 5, 'second-voice', 'Follow the chords with one voice', 'Suivre les accords à une voix'),
+  v('sing.voice.cadence', 6, 'second-voice', 'Sing through the cadences', 'Traverser les cadences en chantant'),
   v('sing.voice.guide', 7, 'second-voice', 'Guide tones on ii–V–I', 'Notes guides sur ii–V–I'),
+  v('sing.voice.patterns', 8, 'second-voice', 'Cycle of fifths, tritone substitution, line cliché', 'Cycle des quintes, substitution tritonique, ligne cliché'),
   v('sing.voice.free', 8, 'second-voice', 'Improvise a second voice', 'Improviser une deuxième voix'),
   // Playing
   s('play.penta.free', 1, 'penta-jam', 'Free play on five notes', 'Jeu libre sur cinq notes', true),
@@ -109,6 +115,7 @@ export const GAMES = [
   { id: 'echo-penta', domain: 'listen', icon: '◍', en: 'Echo', fr: 'Écho' },
   { id: 'ear-intervals', domain: 'listen', icon: '⇅', en: 'Intervals by ear', fr: 'Intervalles à l’oreille' },
   { id: 'ear-chords', domain: 'listen', icon: '≡', en: 'Chords by ear', fr: 'Accords à l’oreille' },
+  { id: 'ear-cadences', domain: 'listen', icon: '◗', en: 'Cadences by ear', fr: 'Cadences à l’oreille' },
   { id: 'sing-match', domain: 'sing', icon: '◉', en: 'Sing it', fr: 'Chante-la' },
   { id: 'second-voice', domain: 'sing', icon: '◎', en: 'Second voice', fr: 'Deuxième voix' },
   { id: 'penta-jam', domain: 'play', icon: '✦', en: 'Five-note jam', fr: 'Impro cinq notes' },

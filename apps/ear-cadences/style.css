@@ -1,0 +1,9 @@
+/* Cadences by ear */
+.cd-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 440px; }
+.cd-choices .ml-btn { font-size: 18px; line-height: 1.2; min-height: 72px; padding: 8px; }
+.cd-choices .ml-btn:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.cd-choices .cd-icon { display: grid; place-items: center; aspect-ratio: 1; color: var(--fg); }
+.cd-icon svg { width: 66%; height: 66%; display: block; }
+.cd-icon.ml-right, .cd-icon.ml-wrong { color: var(--bg); }
+.cd-next { visibility: hidden; }
+.cd-next.cd-show { visibility: visible; }
