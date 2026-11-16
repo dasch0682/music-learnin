@@ -1,0 +1,28 @@
+/* Phrases and form */
+.fm-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; min-height: 56px; width: 100%; }
+.fm-row:empty { display: none; }
+.fm-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.fm-block {
+  width: 56px; height: 56px; padding: 0; display: grid; place-items: center; position: relative;
+  background: var(--surface); border: 2px solid var(--line); border-radius: 12px; color: var(--bg);
+  font: 700 20px/1 system-ui, sans-serif; cursor: pointer; transition: transform .1s;
+}
+.fm-block:disabled { cursor: default; }
+.fm-block.fm-on { transform: scale(1.22); border-color: var(--accent); }
+.fm-c-A { background: var(--accent); border-radius: 50%; border-color: transparent; }
+.fm-c-B { background: var(--good); border-radius: 10px; border-color: transparent; }
+.fm-c-C { background: var(--bad); clip-path: polygon(50% 4%, 96% 92%, 4% 92%); border-color: transparent; }
+.fm-c-A.fm-on, .fm-c-B.fm-on, .fm-c-C.fm-on { border-color: transparent; }
+.fm-p1::after, .fm-p2::after { content: ''; position: absolute; width: 9px; height: 9px; border-radius: 50%; background: var(--bg); top: 8px; right: 8px; }
+.fm-p2::after { box-shadow: -13px 0 var(--bg); }
+.fm-block.ml-wrong { outline: 4px solid var(--bad); outline-offset: 2px; }
+.fm-pal { display: flex; gap: 16px; justify-content: center; margin-top: 8px; }
+.fm-pal .fm-block { width: 76px; height: 76px; }
+.fm-choices { display: grid; grid-template-columns: repeat(var(--cols, 2), 1fr); gap: 12px; width: 100%; max-width: 440px; }
+.fm-choices .ml-btn { font-size: 18px; line-height: 1.2; min-height: 72px; padding: 8px; display: grid; place-items: center; }
+.fm-choices .fm-icon { aspect-ratio: 1; min-height: 0; color: var(--fg); }
+.fm-icon svg { width: 66%; height: 66%; display: block; }
+.fm-choices .ml-right, .fm-choices .ml-wrong { color: var(--bg); }
+.fm-mini { width: 44px; height: 32px; min-height: 0 !important; padding: 0; font-size: 14px !important; }
+.fm-next { visibility: hidden; }
+.fm-next.fm-show { visibility: visible; }
