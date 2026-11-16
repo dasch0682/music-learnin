@@ -9,7 +9,7 @@
 .rd-meter { fill: var(--fg); font: 700 21px Georgia, "Times New Roman", serif; }
 .rd-three { fill: var(--fg); font: italic 700 12px Georgia, "Times New Roman", serif; }
 .rd-slot { fill: none; stroke: var(--line); stroke-width: 2; stroke-dasharray: 5 4; }
-.rd-slot.rd-next { stroke: var(--accent); }
+.rd-slot.rd-now { stroke: var(--accent); }
 .rd-ok .rd-fill { fill: var(--good); }
 .rd-ok .rd-open, .rd-ok .rd-stroke, .rd-ok .rd-rest path { stroke: var(--good); }
 .rd-ok .rd-three { fill: var(--good); }

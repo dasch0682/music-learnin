@@ -115,7 +115,7 @@ export function drawBars(box, c) {
   // Empty slots, one per remaining beat.
   const w = (c.pulse / c.total) * (x1 - x0) - 8;
   for (let t = filled, i = 0; t < c.total - 1e-6; t += c.pulse, i++) {
-    el('rect', { x: xOf(t) - 14, y: Y - 22, width: w, height: 44, rx: 8, class: 'rd-slot' + (i === 0 ? ' rd-next' : '') }, svg);
+    el('rect', { x: xOf(t) - 14, y: Y - 22, width: w, height: 44, rx: 8, class: 'rd-slot' + (i === 0 ? ' rd-now' : '') }, svg);
   }
   for (const status of [undefined, true, false]) {
     const part = evs.filter((e) => (c.marks ? c.marks[e.k] : undefined) === status);

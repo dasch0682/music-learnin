@@ -94,9 +94,11 @@ await page.goto(base);
 for (const L of [1, 2, 3, 4, 5, 6, 7, 8, 9, '5b']) {
   const level = parseInt(L);
   if (process.env.ONLY && !process.env.ONLY.split(',').includes(String(L))) continue;
-  if (L === '5b') await page.evaluate(() => new Promise((res) => { // later stages: mark the first items as mastered
-    const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const tx = r.result.transaction('attempts', 'readwrite'); const o = tx.objectStore('attempts'); for (const item of ['4th:I-V-I-V', '7th:I-V-I-V']) for (let k = 0; k < 6; k++) o.add({ game: 'penta-jam', skill: 'play.tension', item, ok: true, level: 5, ms: 1, t: Date.now() - 1000 + k }); tx.oncomplete = res; };
-  }));
+  if (L === '5b') { await page.reload(); await page.click('.ml-start'); await page.waitForFunction(() => window.__test?.running); }
+  if (L === '5b') await page.evaluate(async () => { // later stages: mark the first items as mastered (through the core's own logger)
+    const { logAttempt } = await import('/@fs/home/claude/music-learnin/packages/core/storage.js');
+    for (const item of ['4th:I-V-I-V', '7th:I-V-I-V']) for (let k = 0; k < 6; k++) await logAttempt({ game: 'penta-jam', skill: 'play.tension', item, correct: true, level: 5, ms: 1 });
+  });
   await page.evaluate((l) => localStorage.setItem('ml:settings:penta-jam', JSON.stringify({ level: l, tempo: 140, names: false })), level);
   await page.reload();
   await page.click('.ml-start');

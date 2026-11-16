@@ -134,7 +134,7 @@ function attempt(level, key) {
   }
   // 6: minor, five notes, one suspension (4-3 or 7-6)
   const kind = pick(['43', '76']);
-  const b0 = -9 + rand(5), m0 = kind === '43' ? 3 + rand(6) : 8 + rand(5);
+  const b0 = (kind === '43' ? -6 : -4) + rand(5), m0 = kind === '43' ? 3 + rand(6) : 8 + rand(5);
   const top = kind === '43' ? [m0, 7, 7, 6, 7] : [m0, 10, 10, 9, 7];
   const bottom = kind === '43' ? [b0, -4, -3, -3, -7] : [b0, -2, -3, -3, -7];
   if (Math.abs(top[1] - m0) > 2 || Math.abs(bottom[1] - b0) > 2 || m0 === top[1] || cls(m0) === 6 || cls(b0) === 6) return null;
@@ -311,7 +311,7 @@ async function check() {
   }
 }
 
-window.__test = { state: () => ({
+window.__test = { sample: (level, k) => Array.from({ length: k }, () => { const x = makeQuestion(level); return x.tag + ':' + Object.keys(KEYS).find((n) => KEYS[n] === x.key); }), state: () => ({
   level: q?.level, item: q?.item, tag: q?.tag, n: q?.n, key: q && Object.keys(KEYS).find((k) => KEYS[k] === q.key), sig: q?.key.sig,
   top: q?.top.map((n) => n.midi), bottom: q?.bottom.map((n) => n.midi), spellTop: q?.top.map((n) => [n.letter, n.acc]), spellBottom: q?.bottom.map((n) => [n.letter, n.acc]),
   entered: { top: [...entered.top], bottom: [...entered.bottom] }, marks, active, locked, ranges: RANGE,
