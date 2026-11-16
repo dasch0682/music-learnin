@@ -43,3 +43,10 @@ Files of your game may already exist from an interrupted run: read them and cont
 ## Final report
 
 At most 12 lines per game: levels done, how answers are judged, what is unfinished, core issues.
+
+## If your task says you may edit `packages/core` or the home page
+
+- Keep every existing export and behaviour working at each save: other agents are running games against the core while you work.
+- Document what you add in `packages/core/README.md` (short).
+- After your changes: `npx vite build` is allowed for you only at the very end, followed by
+  `npx vite preview --port 4173 --strictPort &` and `node tools/smoke.mjs` (must print "all good"); stop the preview.

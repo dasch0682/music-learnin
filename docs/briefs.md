@@ -123,3 +123,109 @@ L4 ii, vi, iii as family members; several keys. L5 minor keys, V7, one secondary
 L6 build ii–V–I in a key from six chord-symbol blocks. L7 tritone substitute, backdoor; pick the five-note scale that fits a chord.
 L8 turnarounds (I–vi–ii–V and variants); label each chord of a jazz progression as rest, movement or tension.
 item = 'goal:settled', 'melody', 'family', 'iiVI:F', 'tritone', 'scale', 'turnaround'…
+
+# Second wave
+
+## platform — profiles, guided path, compare, rewards (edits `packages/core`, `apps/hub.*`, `apps/index.html`, `apps/mastery-map/`)
+Do these in order; each must work before the next. Write `tools/platform.test.mjs`.
+1. `?level=N` in a game URL: `createGame` applies it to `settings.level` (if that option exists) and saves it.
+2. Profiles: several learners on one device. A profile = `{ id, name, emoji-free initial colour }` kept in localStorage; the
+   active profile id is stored too. Every new attempt carries `who: <profile id>`; attempts without `who` belong to the first
+   profile. `getAttempts`, mastery, settings (keys become per-profile, old keys migrate to the first profile), export/import all
+   work on the active profile by default (`getAttempts({ who: '*' })` for all). Exported results keep `who` and the profile name.
+   Home page: a small profile switcher in the top bar (add, rename, switch, delete with an in-page confirmation).
+3. Guided path, `packages/core/path.js`: `nextSteps(attempts, { count })` returns the 3–5 best things to play now as
+   `{ game, level, skill, reason: 'new' | 'weak' | 'review' }`. Rules: skills of the lowest taxonomy level not yet 'good' first,
+   one per domain; skills whose mastery faded come back as 'review'; never propose a skill more than two taxonomy levels above
+   the learner's median level in that domain. Each game level maps to a skill: add an optional `levels` table to `GAMES` in
+   `taxonomy.js` only if you can derive it reliably by reading each game's `main.js`; otherwise link to the game without a level.
+   Home page: a "Today" block at the top ("Aujourd’hui") with these steps as large tiles, then the full list by domain.
+4. Compare: importing a results file made by another profile offers "add as a new profile". The mastery map gets a
+   "compare with…" selector that shows two profiles side by side per skill.
+5. Rewards, wordless and calm: a day streak (days with at least one attempt) and one to three stars per skill
+   (learning, good, mastered) on the home tiles and the map. No sound, no pop-up.
+6. Service worker update: when a new version is installed, the page shows a small "new version · reload" toast.
+
+## midi — real keyboards, better piano, microphone for scales (edits `packages/core/keyboard.js`, `audio.js`, new `midi.js`, `apps/play-scales/`)
+1. `packages/core/midi.js`: Web MIDI input (`navigator.requestMIDIAccess`, optional, silent if absent or refused).
+   `createKeyboard` and `createPads` forward incoming note-on / note-off to `onDown` / `onUp` when the note is one of their keys,
+   and light the key. Nothing changes for players without a MIDI device. Test with a fake `requestMIDIAccess` injected by the test.
+2. `audio.js`: a more piano-like `piano` timbre (several partials, short hammer noise, level-dependent decay), same API and
+   similar loudness. No samples, nothing downloaded.
+3. `apps/play-scales/`: an `input` setting (keyboard / instrument through the microphone) with the transposition setting, as in
+   `apps/play-the-note/`. Any octave accepted, a note counts when held in tune ~0.4 s. Extend `tools/play-scales.test.mjs`
+   with injected pitches. Write `tools/midi.test.mjs`.
+
+## read-melody — "Read and play" / "Lis et joue" — skill `read.melody`
+A short melody written with its rhythm (own SVG renderer in the app: staff, clef, time signature, note heads, stems, beams,
+rests; copy ideas from `apps/tap-rhythm/notation.js` and `packages/core/staff.js`). After a count-in the player plays it on
+the on-screen keyboard in time with a click. Judged on pitch order and on timing (tolerance setting, latency setting);
+a wordless timeline shows early / late / wrong. L1 quarters and halves, 3 notes by step, C–G. L2 4–5 notes, adds pairs of
+eighths. L3 thirds, a quarter rest. L4 G and F major with key signature, dotted quarter + eighth. L5 6/8 or 3/4, leaps to a
+fifth. L6 minor, sixteenths, bass clef. A listen button plays the model. item = level kind + ':' + number of notes.
+
+## rhythm-dictation — "Write the rhythm" / "Écris le rythme" — skill `rhythm.dictation`
+The app plays a one-bar rhythm over a click. The player rebuilds it by tapping beat-sized cells (drawn in notation, copy the
+renderer of tap-rhythm) into the slots of the bar; each cell can be heard; undo; checked when full; wrong beats marked,
+replay, retry. L1 quarter, two eighths, half (2 beats). L2 adds the quarter rest. L3 adds four sixteenths and
+eighth + two sixteenths. L4 dotted quarter + eighth, syncopation. L5 triplets. L6 two bars, 6/8 cells. item = pattern id.
+
+## two-voices — "Two voices" / "Deux voix" — skill `listen.twovoices`
+The app plays two lines together (a bass and a melody, 3–5 notes each, note against note). Two staves (treble, bass). The
+first note of each is given. The player picks a staff (tap it), then enters its notes on the keyboard as in
+`apps/melody-dictation/` (copy what you need). Buttons: hear both, hear top only, hear bottom only. Checked when both are
+complete; wrong notes in `var(--bad)`. L1 the bass holds one note, 3 melody notes. L2 the bass alternates tonic and fifth.
+L3 parallel thirds or sixths. L4 contrary motion. L5 I–IV–V–I bass with a free melody. L6 minor, 5 notes, one suspension.
+item = texture id ('drone', 'tonic-fifth', 'parallel', 'contrary', 'cadence', 'suspension').
+
+## music-words — "Music words" / "Les mots de la musique" — skills `listen.expression` (L1–L3), `read.expression` (L4–L6)
+L1 the same short tune twice, one loud and one soft (or fast / slow): which was louder (faster)? Two big buttons "1" "2".
+L2 short (staccato) or smooth (legato); getting louder or softer: answer with drawn icons (dots, a slur, an opening or
+closing hairpin). L3 the app plays a tune one way; pick among the signs p, f, staccato dot, slur, crescendo, diminuendo.
+L4 signs to words: pp p mp mf f ff, and the reverse; hear each. L5 tempo terms (largo, adagio, andante, moderato, allegro,
+presto) ordered from slow to fast, and matched to a tune played at that tempo. L6 articulation and expression terms
+(staccato, legato, accent, fermata, ritardando, accelerando, da capo, coda): hear or see, pick the term; short plain
+definitions in both languages appear after the answer. Italian terms stay in Italian. item = term or contrast id.
+
+## form — "Phrases and form" / "Phrases et forme" — skill `listen.form`
+Tunes are generated from short phrases (2 bars, pentatonic or major). L1 same or different: two phrases, two icon buttons.
+L2 question or answer: does the phrase end hanging or settled (drawings of `apps/ear-cadences/`)? L3 the app plays three or
+four phrases; the player labels them with coloured blocks (first is A; same = same colour): AAB, ABA, AABA, ABAB.
+L4 with varied repeats (A, A′). L5 name the form: binary, ternary, rondo (ABACA), theme and variation (FR: forme binaire,
+ternaire, rondo, thème et variations). L6 count the bars of a phrase (4, 6, 8) and find where the tune modulates.
+Every phrase can be replayed by tapping its block. item = form id.
+
+## known-tunes — "Tunes you know" / "Airs connus" — skill `play.tunes`
+Only traditional, public-domain melodies, stored as MIDI note lists with their names in both languages, no lyrics
+(for example Frère Jacques, Au clair de la lune, Ah ! vous dirai-je maman, Ode to Joy, Sur le pont d’Avignon, Mary had a
+little lamb, London Bridge, J’ai du bon tabac, Alouette, Oh ! Susanna, Amazing Grace, Greensleeves): check every note
+list by degrees before using it. The player rebuilds a tune by ear on the keyboard, phrase by phrase: the app plays a phrase,
+the player plays it back; wrong key flashes, logged once per phrase. L1 3–5 note openings on white keys with the start key
+marked. L2 whole first phrases. L3 full tunes phrase by phrase. L4 the same in G or F. L5 minor or wider tunes.
+L6 start from any key (transpose by ear). The tune's name is shown only after success at L1–L2. item = tune id.
+
+## compose — "Make a tune" / "Invente un air" — no skill, nothing is logged
+A calm sandbox. A grid of 16 steps by 6 rows (pentatonic by default, no wrong note); tapping a cell toggles a note and
+sounds it; play / stop loops the tune with a moving cursor; a tempo setting; a scale setting (major pentatonic, minor
+pentatonic, major, minor, blues); an optional second layer of four chord blocks (I, IV, V, vi) under the grid, one per bar;
+clear; tunes are kept in localStorage (three slots) and can be exported / imported as a small JSON file (own buttons in the
+page, same file style as the core). No score, no judgement. The test checks toggling, playback order, save and reload.
+
+## threads — tension and release in two existing games (edits `apps/second-voice/`, `apps/penta-jam/`)
+1. `apps/second-voice/`: add level "Chains of suspensions" / "Retards en chaîne", skill `sing.voice.chain`, placed before the
+   improvisation level (which stays last). The bass moves down by step while the singer holds, then resolves down:
+   7–6 chains (two or three links) and 4–3 chains; the held note is a tension (striped band), its resolution a rest.
+   Update `tools/second-voice.test.mjs` for the new level count.
+2. `apps/penta-jam/`: add a level "Tension and release" / "Tension et détente", skill `play.tension`, after the three-chord
+   levels: backing I–V–I–V (then I–IV–V–I); one extra pad outside the five notes (the fourth, then the seventh) is drawn
+   differently; the goal of a phrase: play that pad on the V chord and move to a neighbouring pad when I returns.
+   Renumber later levels consistently. Write `tools/penta-jam.test.mjs` covering every level (expose what it needs through
+   `window.__test`).
+
+## tests-a — tests only for `high-low`, `echo-penta`, `ear-intervals`, `ear-chords`
+Write `tools/<slug>.test.mjs` for each (every level: a wrong answer then right ones, attempts in IndexedDB, theory recomputed
+from the notes, no console error, no overflow). You may add or extend a `window.__test` hook in each app and fix real bugs
+you find (report them); change nothing else in the apps.
+
+## tests-b — tests only for `sing-match`, `play-the-note`, `find-a-note`
+Same rules as tests-a. `sing-match` and the microphone mode of `play-the-note` are tested with injected pitches.
