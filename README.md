@@ -37,3 +37,10 @@ Deploy the content of `dist/` at the root of the site. Paths are relative, so a 
 1. Copy `apps/find-a-note/` to `apps/<slug>/`.
 2. Add the game to `GAMES` and link its skills in `packages/core/taxonomy.js`.
 3. Follow the rules in `packages/core/README.md`.
+
+## Threads
+
+Two ideas come back at every level, first by ear and by voice, later with their names:
+
+- the five-note (pentatonic) scale: `echo-penta`, `penta-jam`, `sing-match` (skills flagged `penta`);
+- the second voice, tension and release: `second-voice` (skills flagged `voice`).

@@ -25,7 +25,9 @@ export const LEVELS = [
   { id: 8, en: 'Mastery', fr: 'Maîtrise' },
 ];
 
-const s = (id, level, game, en, fr, penta = false) => ({ id, domain: id.split('.')[0], level, game, en, fr, penta });
+// voice = part of the second-voice thread (tension and release, from one held note to jazz guide tones).
+const s = (id, level, game, en, fr, penta = false, voice = false) => ({ id, domain: id.split('.')[0], level, game, en, fr, penta, voice });
+const v = (id, level, game, en, fr) => s(id, level, game, en, fr, false, true);
 
 export const SKILLS = [
   // Listening
@@ -49,7 +51,12 @@ export const SKILLS = [
   s('sing.intervals', 3, 'sing-match', 'Sing an interval', 'Chanter un intervalle'),
   s('sing.scale', 4, 'sing-match', 'Sing scale degrees', 'Chanter les degrés de la gamme'),
   s('sing.sight', 6, null, 'Sight-singing', 'Déchiffrage chanté'),
-  s('sing.harmony', 7, null, 'Sing a second voice', 'Chanter une deuxième voix'),
+  v('sing.voice.hold', 1, 'second-voice', 'Hold a note against a moving voice', 'Tenir sa note contre une voix qui bouge'),
+  v('sing.voice.tension', 3, 'second-voice', 'Tension and release', 'Tension et détente'),
+  v('sing.voice.thirds', 4, 'second-voice', 'Sing in thirds', 'Chanter à la tierce'),
+  v('sing.voice.leading', 5, 'second-voice', 'Follow the chords with one voice', 'Suivre les accords à une voix'),
+  v('sing.voice.guide', 7, 'second-voice', 'Guide tones on ii–V–I', 'Notes guides sur ii–V–I'),
+  v('sing.voice.free', 8, 'second-voice', 'Improvise a second voice', 'Improviser une deuxième voix'),
   // Playing
   s('play.penta.free', 1, 'penta-jam', 'Free play on five notes', 'Jeu libre sur cinq notes', true),
   s('play.penta.callresponse', 2, 'penta-jam', 'Question and answer', 'Question et réponse', true),
@@ -103,6 +110,7 @@ export const GAMES = [
   { id: 'ear-intervals', domain: 'listen', icon: '⇅', en: 'Intervals by ear', fr: 'Intervalles à l’oreille' },
   { id: 'ear-chords', domain: 'listen', icon: '≡', en: 'Chords by ear', fr: 'Accords à l’oreille' },
   { id: 'sing-match', domain: 'sing', icon: '◉', en: 'Sing it', fr: 'Chante-la' },
+  { id: 'second-voice', domain: 'sing', icon: '◎', en: 'Second voice', fr: 'Deuxième voix' },
   { id: 'penta-jam', domain: 'play', icon: '✦', en: 'Five-note jam', fr: 'Impro cinq notes' },
   { id: 'play-the-note', domain: 'play', icon: '♪', en: 'Play the note', fr: 'Joue la note' },
   { id: 'tap-rhythm', domain: 'rhythm', icon: '●', en: 'Tap the rhythm', fr: 'Frappe le rythme' },

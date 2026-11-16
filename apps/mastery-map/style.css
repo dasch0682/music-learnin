@@ -16,3 +16,4 @@
 .map-planned { color: var(--muted); }
 .map-tag { font-size: 12px; color: var(--muted); text-align: right; }
 .ml-page .ml-hint { margin-top: 16px; }
+.map-legend { white-space: pre-wrap; }

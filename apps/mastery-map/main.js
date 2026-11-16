@@ -11,6 +11,7 @@ const T = {
   soon: { en: 'soon', fr: 'bientôt' },
   level: { en: 'Level', fr: 'Niveau' },
   thread: { en: 'Five-note thread', fr: 'Fil des cinq notes' },
+  voice: { en: 'Second-voice thread', fr: 'Fil de la deuxième voix' },
   empty: { en: 'Play a game: your progress will appear here.', fr: 'Joue à un jeu : ta progression apparaîtra ici.' },
 };
 
@@ -47,7 +48,8 @@ async function render(main) {
       bar.firstChild.style.width = Math.round(score(s.id) * 100) + '%';
       const row = h(game ? 'a' : 'div', { className: `map-skill map-${status(s.id)}${game ? '' : ' map-planned'}` },
         h('span', { className: 'map-level', textContent: s.level, title: `${tr(T.level)} ${s.level} · ${tr(LEVELS[s.level - 1])}` }),
-        h('span', { className: 'map-name' }, tr(s), s.penta ? h('span', { className: 'map-penta', textContent: ' ✦', title: tr(T.thread) }) : null),
+        h('span', { className: 'map-name' }, tr(s), s.penta ? h('span', { className: 'map-penta', textContent: ' ✦', title: tr(T.thread) }) : null,
+          s.voice ? h('span', { className: 'map-penta', textContent: ' ◆', title: tr(T.voice) }) : null),
         game ? bar : h('span', { className: 'map-tag', textContent: tr(T.soon) }));
       if (game) row.href = `../${game.id}/`;
       return row;
@@ -56,7 +58,7 @@ async function render(main) {
   main.replaceChildren(
     grid,
     mastery.size ? null : h('p', { className: 'ml-hint', textContent: tr(T.empty) }),
-    h('p', { className: 'map-legend', textContent: '✦ ' + tr(T.thread) }),
+    h('p', { className: 'map-legend', textContent: `✦ ${tr(T.thread)}   ◆ ${tr(T.voice)}` }),
     ...sections,
   );
 }

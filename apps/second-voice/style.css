@@ -1,0 +1,46 @@
+/* Second voice: the singer's dot, the note to sing (band) and the app's own voice (thin lines). */
+.sv-dots { display: flex; gap: 14px; min-height: 20px; align-items: center; }
+.sv-dots span { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--muted); transition: .2s; }
+.sv-dots span.sv-t { border-radius: 3px; transform: rotate(45deg); } /* tension steps are diamonds */
+.sv-dots span.sv-now { border-color: var(--accent); scale: 1.25; }
+.sv-dots span.sv-done { background: var(--good); border-color: var(--good); }
+.ml-stage > .ml-hint { margin-top: -10px; }
+
+.sv-meter {
+  position: relative; width: 100%; max-width: 340px; height: min(300px, 40dvh); flex: none;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden;
+  opacity: .6; transition: opacity .2s, border-color .2s;
+}
+.sv-meter.sv-live { opacity: 1; border-color: var(--muted); }
+.sv-band {
+  position: absolute; left: 0; right: 0; top: 50%; height: 14px;
+  background: color-mix(in srgb, var(--good) 24%, transparent);
+  border-top: 1px solid var(--good); border-bottom: 1px solid var(--good);
+  transition: transform .25s, background .25s, opacity .2s;
+}
+.sv-band.sv-tension {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 38%, transparent) 0 6px, color-mix(in srgb, var(--accent) 14%, transparent) 6px 12px);
+  border-color: var(--accent);
+}
+.sv-band.sv-hidden { opacity: 0; }
+.sv-others i {
+  position: absolute; left: 12%; right: 12%; top: 50%; height: 3px; margin-top: -1.5px; border-radius: 2px;
+  background: var(--muted); opacity: .7; transition: transform .25s;
+}
+.sv-dot {
+  position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px;
+  transition: transform .09s linear, opacity .25s; opacity: .25; will-change: transform;
+}
+.sv-dot.sv-on { opacity: 1; }
+.sv-dot i { position: absolute; inset: 14px; border-radius: 50%; background: var(--fg); transition: background .1s; }
+.sv-dot.sv-in i { background: var(--good); }
+.sv-dot svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.sv-dot circle { fill: none; stroke: var(--good); stroke-width: 4; stroke-linecap: round; }
+
+.sv-controls { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; width: 100%; max-width: 340px; }
+.sv-controls .ml-round { grid-column: 2; width: 72px; height: 72px; font-size: 28px; transition: opacity .2s; }
+.sv-controls .ml-round.sv-busy { opacity: .5; }
+.sv-skip { grid-column: 3; justify-self: end; font-size: 15px; color: var(--muted); }
+.sv-offer { min-height: 48px; }
+.sv-offer.sv-off { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) { .sv-dot, .sv-band, .sv-others i { transition: opacity .25s; } }
