@@ -1,0 +1,13 @@
+/* Scales by ear */
+.sc-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 440px; }
+.sc-choices .ml-btn { font-size: 17px; line-height: 1.2; min-height: 64px; padding: 8px; }
+.sc-choices .ml-btn:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.sc-choices .sc-icon { display: grid; place-items: center; aspect-ratio: 1; }
+.sc-icon svg { width: 62%; height: 62%; display: block; }
+.sc-icon.sc-bright { color: var(--accent); }
+.sc-icon.sc-dark { color: var(--muted); }
+.sc-icon.ml-right, .sc-icon.ml-wrong { color: var(--bg); }
+.sc-choices .ml-btn:disabled.sc-playing { opacity: 1; }
+.sc-playing { outline: 4px solid var(--fg); outline-offset: 3px; }
+.sc-next { visibility: hidden; }
+.sc-next.sc-show { visibility: visible; }

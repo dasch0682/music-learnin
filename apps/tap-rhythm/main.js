@@ -2,7 +2,7 @@
 import { createGame } from '@core/shell.js';
 import { audio, audioTime, click, tap, playNote } from '@core/audio.js';
 import { loadItemMastery, pickWeak } from '@core/mastery.js';
-import { poolFor, pulsePattern, timing, judge } from './patterns.js';
+import { poolFor, pulsePattern, timing, judge, ODD } from './patterns.js';
 import { createScore } from './notation.js';
 import './style.css';
 
@@ -26,6 +26,7 @@ const game = createGame({
       { value: 6, label: L('6 · Dotted notes, syncopation', '6 · Notes pointées, syncopes') },
       { value: 7, label: L('7 · Triplets and swing', '7 · Triolets et swing') },
       { value: 8, label: L('8 · Compound time 6/8', '8 · Mesure composée 6/8') },
+      { value: 9, label: L('9 · Odd meters 5/8, 7/8, 5/4', '9 · Mesures asymétriques 5/8, 7/8, 5/4') },
     ] },
     { key: 'tempo', label: L('Tempo (bpm)', 'Tempo (bpm)'), type: 'range', min: 50, max: 140, step: 2, default: 72 },
     { key: 'tolerance', label: L('Tolerance', 'Tolérance'), type: 'select', default: 'normal', options: [
@@ -39,8 +40,9 @@ const game = createGame({
 
 const SKILLS = {
   1: 'rhythm.pulse', 2: 'rhythm.echo.basic', 3: 'rhythm.read.basic', 4: 'rhythm.rests',
-  5: 'rhythm.sixteenths', 6: 'rhythm.syncopation', 7: 'rhythm.triplets', 8: 'rhythm.compound',
+  5: 'rhythm.sixteenths', 6: 'rhythm.syncopation', 7: 'rhythm.triplets', 8: 'rhythm.compound', 9: 'rhythm.odd',
 };
+const MAX_LEVEL = 9;
 const WINDOWS = { easy: 0.16, normal: 0.11, strict: 0.07 }; // seconds at 72 bpm
 const BUCKETS = [{ id: 'slow', mult: 0.8 }, { id: 'medium', mult: 1 }, { id: 'fast', mult: 1.25 }];
 const STREAK = 8;
@@ -109,6 +111,7 @@ function drawScore() {
   score.draw({
     events: ch.tm.events, total: ch.tm.total, pulse: ch.tm.pulse, barStarts: ch.tm.barStarts, meter: ch.tm.meter,
     swing: ch.tm.swing, notes: ch.level >= 3, marks: ch.level === 2 ? [] : ch.tm.onsets,
+    beats: ch.tm.beats, beamStarts: ch.tm.unit === 0.5 ? ch.tm.groupStarts : null,
   });
 }
 
@@ -162,12 +165,22 @@ function begin(mode) {
   const clicks = (from, n, gain, accentEvery) => {
     for (let i = 0; i < n; i++) add(from + i * P, (when) => click({ when, gain, accent: accentEvery ? i % accentEvery === 0 : false }));
   };
+  // Odd meters: clicks on the grid of counts. gains = [inside a group, group start, bar start] (0 = silent).
+  // A group start is accented; the bar start is stronger still (two clicks at once).
+  const gridClicks = (from, list, gains) => list.forEach((g) => {
+    if (!gains[g.s]) return;
+    add(from + g.t * q, (when) => {
+      click({ when, gain: gains[g.s], accent: g.s > 0 });
+      if (g.s === 2) click({ when, gain: gains[2] * 0.6 });
+    });
+  });
+  const softGrid = (from) => gridClicks(from, tm.grid, [tm.unit === 1 ? 0.05 : 0, 0.08, 0.1]);
   const notes = (from) => tm.events.filter((e) => !e.rest).forEach((e) =>
     add(from + e.tt * q, (when) => playNote(74, { when, dur: Math.max(0.05, e.td * q * 0.82 - 0.04), gain: 0.3, timbre: 'bass' })));
   let t = audioTime() + 0.35;
   if (mode === 'listen') {
     r.listenAt = t;
-    clicks(t, pulses, 0.1, perBar);
+    if (tm.grid) softGrid(t); else clicks(t, pulses, 0.1, perBar);
     notes(t);
     t += len;
   } else {
@@ -183,6 +196,10 @@ function begin(mode) {
       clicks(t, pulses, 0.12, perBar);
       notes(t);
       t += len;
+    } else if (tm.grid) { // one bar of count-in that follows the grouping
+      r.countAt = t; r.countTimes = tm.counts.map((c) => c * q); r.countN = r.countTimes.length;
+      gridClicks(t, tm.grid.filter((g) => g.t < tm.barLen - 1e-6), [tm.unit === 1 ? 0.13 : 0.07, 0.24, 0.32]);
+      t += tm.barLen * q;
     } else { // one bar of count-in
       r.countAt = t; r.countN = perBar;
       clicks(t, perBar, 0.3, perBar);
@@ -190,7 +207,7 @@ function begin(mode) {
       t += perBar * P;
     }
     r.turnAt = t;
-    if (ch.level !== 1) clicks(t, pulses, 0.1, perBar);
+    if (tm.grid) softGrid(t); else if (ch.level !== 1) clicks(t, pulses, 0.1, perBar);
     t += len;
   }
   r.end = t;
@@ -217,7 +234,8 @@ function frame() {
     setPhase('listen', '♪');
     score.cursor((now - run.listenAt) / q);
   } else if (run.countAt != null && now >= run.countAt) {
-    setPhase('count', String(clamp(Math.floor((now - run.countAt) / P) + 1, 1, run.countN)));
+    const k = run.countTimes ? run.countTimes.filter((c) => c <= now - run.countAt + 1e-3).length : Math.floor((now - run.countAt) / P) + 1;
+    setPhase('count', String(clamp(k, 1, run.countN)));
     score.cursor(null);
   } else setPhase(run.mode === 'listen' ? 'listen' : 'count', run.mode === 'listen' ? '♪' : '');
   run.raf = requestAnimationFrame(frame);
@@ -250,7 +268,7 @@ async function finish() {
   if (my !== gen) return;
   if (res.correct) {
     streak = failedOnce ? 0 : streak + 1;
-    if (streak >= STREAK && ch.level < 8 && levelBtn.hidden) {
+    if (streak >= STREAK && ch.level < MAX_LEVEL && levelBtn.hidden) {
       levelBtn.hidden = false;
       labels(); layout();
       game.say(game.t('levelUp'));
@@ -297,7 +315,7 @@ listenBtn.onclick = () => {
   if (run?.mode === 'listen') { stop(); setPhase('idle', '▶'); return; }
   begin('listen');
 };
-levelBtn.onclick = () => game.set('level', Math.min(8, level() + 1));
+levelBtn.onclick = () => game.set('level', Math.min(MAX_LEVEL, level() + 1));
 
 // ---- test hook ----
 function publish() {
@@ -306,15 +324,19 @@ function publish() {
     tol: ch ? Math.round(ch.tol * 1000) : null,
     expected: ch ? ch.onsets.map((s) => Math.round(s * 1000)) : [],
     turnStart: run && run.turnAt != null ? (run.turnAt - offset) * 1000 + (+game.settings.latency || 0) : null,
-    result: lastResult, levelUp: !levelBtn.hidden,
+    result: lastResult, levelUp: !levelBtn.hidden, label: pad.textContent,
+    meter: ch?.tm.meter, groups: ch?.tm.groups || null, len: ch ? Math.round(ch.len * 1000) : null,
   };
 }
 
 /** Test hook: show one pattern of the current level by id. */
 window.__show = (id) => {
   const swing = id.startsWith('sw:');
-  const bars = id.replace('sw:', '').split('|').map((b) => b.split('-'));
-  const item = { id, bars, swing, meter: level() === 8 ? '6/8' : '4/4' };
+  const odd = /^(\d\/\d):([\d+]+):(.+)$/.exec(id);
+  const bars = (odd ? odd[3] : id.replace('sw:', '')).split('|').map((b) => b.split('-'));
+  const item = odd
+    ? { id, bars, meter: odd[1], groups: odd[2].split('+').map(Number), unit: ODD[odd[1]].unit }
+    : { id, bars, swing, meter: level() === 8 ? '6/8' : '4/4' };
   stop(); gen++; lastItem = id; failedOnce = false;
   ch = build(level(), item);
   drawScore(); setPhase('idle', '▶');

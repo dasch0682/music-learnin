@@ -1,0 +1,28 @@
+/* Chord paths */
+.pg-row { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; max-width: 440px; }
+.pg-slots { display: flex; gap: 8px; flex: 1; justify-content: center; }
+.pg-slot {
+  flex: 1; max-width: 76px; height: 64px; border-radius: var(--radius); border: 2px dashed var(--line);
+  display: grid; place-items: center; font-size: 17px; font-weight: 600; color: #14161a; white-space: nowrap;
+}
+.pg-slot.pg-full { border: 0; background: hsl(calc(215 - var(--h) * 180) 62% 62%); }
+.pg-slot.pg-now { outline: 4px solid var(--fg); outline-offset: 2px; }
+.pg-slot.pg-ok { outline: 4px solid var(--good); outline-offset: 2px; }
+.pg-slot.pg-bad { outline: 4px solid var(--bad); outline-offset: 2px; opacity: .6; }
+.pg-undo {
+  width: 52px; height: 52px; flex: none; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  display: grid; place-items: center; padding: 0;
+}
+.pg-undo:active { transform: scale(.95); }
+.pg-undo:disabled { opacity: .35; }
+.pg-pads { display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: 10px; width: 100%; max-width: 440px; }
+.pg-pads .ml-pad {
+  aspect-ratio: auto; height: 84px; border-radius: var(--radius); padding: 4px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; line-height: 1.15;
+}
+.pg-pads.pg-big .ml-pad { height: 120px; }
+.pg-pads .ml-pad:active { transform: scale(.94); filter: brightness(1.25); }
+.pg-roman { font-size: 20px; font-weight: 700; white-space: nowrap; }
+.pg-name { font-size: 14px; white-space: nowrap; }
+.pg-next { visibility: hidden; }
+.pg-next.pg-show { visibility: visible; }

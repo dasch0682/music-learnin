@@ -53,9 +53,33 @@ function spread(list, max) {
 const count = (bar, ids) => bar.filter((c) => ids.includes(c)).length;
 const endsOn = (bar, ids) => ids.includes(bar[bar.length - 1]);
 const pat = (bars, extra = {}) => ({
-  id: (extra.swing ? 'sw:' : '') + bars.map((b) => b.join('-')).join('|'),
+  id: (extra.swing ? 'sw:' : '') + (extra.groups ? `${extra.meter}:${extra.groups.join('+')}:` : '') + bars.map((b) => b.join('-')).join('|'),
   bars, meter: '4/4', ...extra,
 });
+
+// Odd meters. unit = length of one count in quarters, groupings = how the counts are grouped in a bar.
+export const ODD = {
+  '5/8': { unit: 0.5, bars: 2, groupings: [[3, 2], [2, 3]] },
+  '7/8': { unit: 0.5, bars: 2, groupings: [[2, 2, 3], [3, 2, 2], [2, 3, 2]] },
+  '5/4': { unit: 1, bars: 1, groupings: [[3, 2], [2, 3]] },
+};
+
+/** Every bar of an odd meter: one filling per group, never across a group. */
+function oddBars(groups, unit) {
+  const fill = (g) => (unit === 1
+    ? fillBar(g === 3 ? ['q', 'ee', 'h', 'h.'] : ['q', 'ee', 'h'], g)
+    : g === 3 ? [['q.'], ['eee'], ['qe']] : [['q'], ['ee']]);
+  return groups.map(fill).reduce((acc, opts) => acc.flatMap((a) => opts.map((c) => [...a, ...c])), [[]]);
+}
+
+const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+/** Keep at most `max` entries, taken with a fixed stride so that neighbours differ (always the same ones). */
+function stride(list, max) {
+  if (list.length <= max) return list;
+  let step = Math.ceil(list.length * 0.382);
+  while (gcd(step, list.length) !== 1) step++;
+  return Array.from({ length: max }, (_, i) => list[(i * step) % list.length]);
+}
 
 const builders = {
   // Echo: long and short sounds.
@@ -101,10 +125,19 @@ const builders = {
     const two = bars.flatMap((a) => last.map((b) => [a, b])).filter(([a, b]) => !(a[0] === 'h.' && b[0] === 'h.'));
     return spread(two, 30).map((bs) => pat(bs, { meter: '6/8' }));
   },
+  // Odd meters: 5/8, 7/8 (two bars) and 5/4 (one bar), built group by group.
+  9: () => Object.entries(ODD).flatMap(([meter, m]) => m.groupings.flatMap((groups) => {
+    const bars = oddBars(groups, m.unit);
+    const last = bars.filter((b) => endsOn(b, ['q', 'q.', 'h', 'h.']));
+    const list = m.bars === 1
+      ? last.filter((b) => count(b, ['ee']) <= 2 && b.length > 2)
+      : bars.filter((b) => !endsOn(b, ['qe'])).flatMap((a) => last.map((b) => [a, b]));
+    return stride(list, m.bars === 1 ? 5 : 6).map((x) => pat(m.bars === 1 ? [x] : x, { meter, groups, unit: m.unit }));
+  })),
 };
 
 const cache = {};
-/** Patterns of a level (2 to 8). */
+/** Patterns of a level (2 to 9). */
 export function poolFor(level) {
   return (cache[level] ||= builders[level]());
 }
@@ -139,6 +172,21 @@ export function timing(p) {
     }
   }
   const barLen = pos / p.bars.length;
+  if (p.groups) { // odd meter: the clicks follow the grouping
+    const unit = p.unit, perBar = Math.round(barLen / unit);
+    const starts = [];
+    p.groups.reduce((at, g) => { starts.push(at); return at + g; }, 0);
+    // grid: one entry per count. s = 2 bar start, 1 group start, 0 inside a group.
+    const grid = barStarts.flatMap((b) => Array.from({ length: perBar }, (_, i) => ({ t: b + i * unit, s: i === 0 ? 2 : starts.includes(i) ? 1 : 0 })));
+    const groupStarts = grid.filter((g) => g.s).map((g) => g.t);
+    return {
+      events, pulse: unit === 1 ? 1 : 1.25, total: pos, barLen, barStarts, meter: p.meter, swing: false,
+      onsets: events.filter((e) => !e.rest).map((e) => e.tt),
+      unit, groups: p.groups, grid, groupStarts,
+      beats: unit === 1 ? grid.map((g) => ({ t: g.t, big: g.s > 0 })) : groupStarts.map((t) => ({ t, big: false })),
+      counts: grid.filter((g) => g.t < barLen - 1e-6 && (unit === 1 || g.s)).map((g) => g.t),
+    };
+  }
   return { events, pulse, total: pos, barLen, barStarts, meter: p.meter, swing: !!p.swing, onsets: events.filter((e) => !e.rest).map((e) => e.tt) };
 }
 

@@ -1,0 +1,12 @@
+/* Key signatures. Colours come from the core variables only. */
+.ks-staff { width: 100%; max-width: 420px; }
+.ks-prompt { min-height: 1.4em; font-size: 24px; font-weight: 600; }
+.ks-answer { width: 100%; display: flex; flex-direction: column; align-items: center; }
+.ks-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 440px; }
+.ks-choices .ml-btn { font-size: 18px; line-height: 1.2; min-height: 68px; padding: 8px; }
+.ks-sigs .ml-btn { padding: 4px 6px; color: var(--fg); }
+.ks-sigs .ml-btn.ml-right, .ks-sigs .ml-btn.ml-wrong { color: var(--bg); }
+.ks-sigs .ml-staff { color: inherit; pointer-events: none; }
+.ks-offer { min-height: 48px; }
+.ks-offer.ks-off { visibility: hidden; }
+.ks-mark { fill: var(--accent); }

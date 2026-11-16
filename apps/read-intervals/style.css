@@ -1,0 +1,13 @@
+/* Read the interval */
+.ri-staff { width: 100%; max-width: 420px; }
+.ri-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 440px; }
+.ri-choices.ri-three { grid-template-columns: repeat(3, 1fr); }
+.ri-choices .ml-btn { font-size: 17px; line-height: 1.2; min-height: 64px; padding: 8px 6px; }
+.ri-choices .ri-icon { display: grid; place-items: center; aspect-ratio: 1; min-height: 0; color: var(--fg); }
+.ri-icon svg { width: 78%; height: 78%; display: block; }
+.ri-num { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.ri-num b { font-size: 26px; line-height: 1; }
+.ri-num span { font-size: 13px; color: var(--muted); }
+.ri-choices .ml-right, .ri-choices .ml-wrong, .ri-choices .ml-right span, .ri-choices .ml-wrong span { color: var(--bg); }
+.ri-next { visibility: hidden; }
+.ri-next.ri-show { visibility: visible; }

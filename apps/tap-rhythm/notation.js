@@ -44,7 +44,7 @@ function drawFlag(g, x, y) {
   el('path', { class: 'tr-fill', d: `M${x} ${y} q1.4 6.5 7 10.5 q3 4.2 0.4 10.5 q0.6 -6.4 -7.4 -11.5 z` }, g);
 }
 
-/** Draw notes and rests. xOf(t) gives the x of a written position. */
+/** Draw notes and rests. xOf(t) gives the x of a written position. beamUnit: beat length, or t → beam group. */
 function drawNotes(g, evs, xOf, beamUnit) {
   const notes = evs.map((ev) => ({ ev, x: xOf(ev.t), ...shape(ev) }));
   const groups = [];
@@ -56,7 +56,7 @@ function drawNotes(g, evs, xOf, beamUnit) {
     else el('ellipse', { cx: nt.x, cy: Y, rx: 6.2, ry: 4.5, class: 'tr-fill', transform: `rotate(-22 ${nt.x} ${Y})` }, g);
     if (nt.stem) el('line', { x1: nt.x + SX, x2: nt.x + SX, y1: Y - 2, y2: TOP, class: 'tr-stroke', 'stroke-width': 1.5 }, g);
     if (nt.dot) el('circle', { cx: nt.x + 11, cy: Y - 0.5, r: 1.9, class: 'tr-fill' }, g);
-    const unit = Math.floor((nt.ev.t + 1e-6) / beamUnit);
+    const unit = typeof beamUnit === 'function' ? beamUnit(nt.ev.t) : Math.floor((nt.ev.t + 1e-6) / beamUnit);
     if (nt.beams && cur && cur.unit === unit && cur.last === i - 1) { cur.items.push(nt); cur.last = i; }
     else if (nt.beams) { cur = { unit, last: i, items: [nt] }; groups.push(cur); }
     else cur = null;
@@ -93,7 +93,7 @@ export function createScore(box) {
   const xOf = (t) => x0 + (t / cfg.total) * (x1 - x0);
   const clampX = (x) => Math.max(7, Math.min(W - 7, x));
 
-  /** c: { events, total, pulse, barStarts, meter, swing, notes: bool, marks: [t] } */
+  /** c: { events, total, pulse, barStarts, meter, swing, notes: bool, marks: [t], beats?: [{ t, big }], beamStarts?: [t] } */
   function draw(c) {
     cfg = c;
     const top = c.notes ? (c.swing ? -26 : 0) : TY - 20;
@@ -107,7 +107,7 @@ export function createScore(box) {
       el('text', { x: 15, y: Y + 17, 'text-anchor': 'middle', class: 'tr-meter' }, svg).textContent = b;
       c.barStarts.slice(1).forEach((t) => { const x = xOf(t) - 9.5; el('line', { x1: x, x2: x, y1: Y - 14, y2: Y + 14, class: 'tr-stroke', 'stroke-width': 1.3 }, svg); });
       el('line', { x1: W - 5, x2: W - 5, y1: Y - 14, y2: Y + 14, class: 'tr-stroke', 'stroke-width': 2.4 }, svg);
-      drawNotes(svg, c.events, xOf, c.pulse);
+      drawNotes(svg, c.events, xOf, c.beamStarts ? (t) => c.beamStarts.filter((b) => b <= t + 1e-6).length : c.pulse);
       if (c.swing) { // eighths = triplet quarter + eighth
         const lg = el('g', { transform: 'translate(40 -30) scale(0.52)' }, svg);
         drawNotes(lg, [{ t: 0, d: 0.5 }, { t: 0.5, d: 0.5 }], (t) => t * 48, 1);
@@ -118,7 +118,8 @@ export function createScore(box) {
     // Timeline: line, pulse dots, expected marks, taps, cursor.
     el('line', { x1: x0 - 12, x2: W - 5, y1: TY, y2: TY, class: 'tr-line' }, svg);
     beats = [];
-    for (let t = 0; t < c.total - 1e-6; t += c.pulse) beats.push(el('circle', { cx: xOf(t), cy: TY + 15, r: 2.4, class: 'tr-beat' }, svg));
+    if (c.beats) for (const b of c.beats) beats.push(el('circle', { cx: xOf(b.t), cy: TY + 15, r: b.big ? 3.6 : 2.4, class: 'tr-beat' }, svg));
+    else for (let t = 0; t < c.total - 1e-6; t += c.pulse) beats.push(el('circle', { cx: xOf(t), cy: TY + 15, r: 2.4, class: 'tr-beat' }, svg));
     const mg = el('g', {}, svg);
     marks = (c.marks || []).map((t) => el('rect', { x: xOf(t) - 1.6, y: TY - 8, width: 3.2, height: 16, rx: 1.6, class: 'tr-mark' }, mg));
     tapsG = el('g', {}, svg);
@@ -134,7 +135,7 @@ export function createScore(box) {
       if (t == null || t < 0 || t > cfg.total) { cursor.setAttribute('visibility', 'hidden'); beats.forEach((b) => b.classList.remove('tr-on')); return; }
       const x = xOf(t);
       cursor.setAttribute('x1', x); cursor.setAttribute('x2', x); cursor.setAttribute('visibility', 'visible');
-      const k = Math.floor(t / cfg.pulse + 1e-6);
+      const k = cfg.beats ? cfg.beats.filter((b) => b.t <= t + 1e-6).length - 1 : Math.floor(t / cfg.pulse + 1e-6);
       beats.forEach((b, i) => b.classList.toggle('tr-on', i === k));
     },
     /** Live tap dot at position t (quarters). */

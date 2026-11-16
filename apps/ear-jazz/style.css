@@ -1,0 +1,19 @@
+/* Jazz colours */
+.jz-top { display: flex; align-items: center; justify-content: center; gap: 20px; padding-left: 84px; }
+.jz-arp {
+  width: 64px; height: 64px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  display: grid; place-items: center; padding: 0;
+}
+.jz-arp:active { transform: scale(.95); }
+.jz-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 440px; }
+.jz-choices .ml-btn { font-size: 22px; line-height: 1.2; min-height: 68px; padding: 8px; font-weight: 600; }
+.jz-choices .ml-btn:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.jz-choices .jz-icon { display: grid; place-items: center; aspect-ratio: 1; }
+.jz-icon svg { width: 62%; height: 62%; display: block; }
+.jz-icon.jz-plain { color: var(--muted); }
+.jz-icon.jz-colour { color: var(--accent); }
+.jz-icon.ml-right, .jz-icon.ml-wrong { color: var(--bg); }
+.jz-choices .ml-btn:disabled.jz-playing { opacity: 1; }
+.jz-playing { outline: 4px solid var(--fg); outline-offset: 3px; }
+.jz-next { visibility: hidden; }
+.jz-next.jz-show { visibility: visible; }
