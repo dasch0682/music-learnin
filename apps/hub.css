@@ -10,3 +10,18 @@
 .hub-bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .hub-bar i { display: block; height: 100%; background: var(--good); }
 .hub-map { display: block; text-align: center; margin-top: 28px; text-decoration: none; color: var(--fg); }
+
+.hub-tile { grid-template-columns: auto 1fr auto; }
+.hub-tile .hub-stars { font-size: 12px; letter-spacing: 1px; color: var(--accent); }
+.hub-tile .hub-bar { grid-column: 1 / -1; }
+.hub-today h2 { display: flex; justify-content: space-between; align-items: center; }
+.hub-streak { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; letter-spacing: 0; }
+.hub-streak i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.hub-streak i.on { background: var(--accent); }
+.hub-streak b { margin-left: 4px; font-variant-numeric: tabular-nums; color: var(--fg); }
+.hub-big { grid-template-columns: 1fr 1fr; }
+.hub-step { min-height: 92px; padding: 16px 14px; align-content: center; border-left: 4px solid var(--accent); grid-template-columns: auto 1fr; }
+.hub-step.hub-weak { border-left-color: var(--bad); }
+.hub-step.hub-review { border-left-color: var(--good); }
+.hub-why { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+.hub-name { overflow-wrap: anywhere; }
