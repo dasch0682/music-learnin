@@ -2,6 +2,7 @@
 import { playNote, audio } from './audio.js';
 import { noteName, isNatural } from './music.js';
 import { getLang } from './i18n.js';
+import { onMidi } from './midi.js';
 
 function bind(root, { onDown, onUp, sound, timbre }) {
   const held = new Map();
@@ -28,6 +29,25 @@ function bind(root, { onDown, onUp, sound, timbre }) {
   root.addEventListener('pointercancel', release);
   root.addEventListener('pointerleave', release);
   root.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // A real MIDI keyboard plays the same keys (only the notes this instrument has).
+  const lit = new Map();
+  const off = onMidi(({ type, midi, velocity }) => {
+    if (!root.isConnected) { off(); return; }
+    const key = root.querySelector(`[data-midi="${midi}"]`);
+    if (type === 'on') {
+      if (!key || root.classList.contains('ml-disabled') || lit.has(midi)) return;
+      audio();
+      lit.set(midi, key);
+      key.classList.add('ml-down');
+      if (sound) playNote(midi, { timbre, dur: 0.5, gain: 0.1 + 0.2 * (velocity / 127) });
+      onDown?.(midi);
+    } else if (lit.has(midi)) {
+      lit.get(midi).classList.remove('ml-down');
+      lit.delete(midi);
+      onUp?.(midi);
+    }
+  });
 }
 
 function api(root) {

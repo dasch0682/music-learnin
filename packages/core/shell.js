@@ -21,7 +21,7 @@ const UI = {
   exportResults: { en: 'Export results', fr: 'Exporter les résultats' },
   importResults: { en: 'Import results', fr: 'Importer les résultats' },
   resetResults: { en: 'Erase results of this game', fr: 'Effacer les résultats de ce jeu' },
-  confirmReset: { en: 'Erase all results of this game on this device?', fr: 'Effacer tous les résultats de ce jeu sur cet appareil ?' },
+  confirmReset: { en: 'Erase all results of this game for this profile?', fr: 'Effacer tous les résultats de ce jeu pour ce profil ?' },
   imported: { en: 'Imported: {n} new', fr: 'Importé : {n} nouveaux' },
   importedSettings: { en: 'Settings imported', fr: 'Réglages importés' },
   badFile: { en: 'This file is not valid', fr: 'Ce fichier n’est pas valide' },
@@ -51,6 +51,26 @@ const h = (tag, props = {}, ...kids) => {
   return n;
 };
 
+// ?level=N in the page URL: set the level (only if the game has a `level` option and N is one of its options), save it,
+// then remove the parameter so that a later reload keeps the level the player reached.
+function applyUrlLevel(config, settings) {
+  try {
+    const url = new URL(location.href);
+    const raw = url.searchParams.get('level');
+    if (raw == null) return;
+    url.searchParams.delete('level');
+    history.replaceState(history.state, '', url);
+    const f = (config.settings || []).find((x) => x.key === 'level');
+    if (!f) return;
+    let value;
+    if (f.options) value = f.options.find((o) => String(o.value) === raw.trim())?.value;
+    else if (/^\d+$/.test(raw.trim()) && +raw >= (f.min ?? -Infinity) && +raw <= (f.max ?? Infinity)) value = +raw;
+    if (value === undefined) return;
+    settings.level = value;
+    saveSettings(config.id, settings);
+  } catch { /* no URL support: ignore */ }
+}
+
 /**
  * Create a game page.
  * config: {
@@ -71,6 +91,7 @@ export function createGame(config) {
   head(home);
   const defaults = Object.fromEntries((config.settings || []).map((f) => [f.key, f.default]));
   const settings = getSettings(config.id, defaults);
+  applyUrlLevel(config, settings);
   const handlers = { settings: new Set(), lang: new Set() };
   const emit = (ev) => handlers[ev].forEach((fn) => fn(ev === 'lang' ? getLang() : settings));
   const t = createT(config.strings || {});

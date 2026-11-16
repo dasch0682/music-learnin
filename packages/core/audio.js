@@ -20,7 +20,8 @@ export const audioReady = () => !!ac && ac.state === 'running';
 export const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const TIMBRES = {
-  piano: { waves: [['triangle', 1, 1], ['sine', 2, 0.3]], attack: 0.005, sustain: 0, release: 0.25 },
+  // Piano: several slightly stretched partials, each decaying at its own speed (see playPiano). `waves` is only the fallback.
+  piano: { waves: [['triangle', 1, 1], ['sine', 2, 0.3]], attack: 0.005, sustain: 0, release: 0.25, piano: true },
   pad: { waves: [['sine', 1, 1], ['sine', 2, 0.15]], attack: 0.08, sustain: 1, release: 0.3 },
   pluck: { waves: [['sawtooth', 1, 0.5], ['triangle', 1, 0.7]], attack: 0.002, sustain: 0, release: 0.12 },
   bass: { waves: [['triangle', 1, 1], ['sine', 0.5, 0.5]], attack: 0.005, sustain: 0.6, release: 0.15 },
@@ -32,6 +33,7 @@ export function playNote(midi, { dur = 0.6, when = 0, gain = 0.25, timbre = 'pia
   const ctx = audio();
   const tb = TIMBRES[timbre] || TIMBRES.piano;
   const t0 = ctx.currentTime + when;
+  if (tb.piano) return playPiano(ctx, midi, t0, dur, gain, tb);
   const env = ctx.createGain();
   env.gain.setValueAtTime(0.0001, t0);
   env.gain.exponentialRampToValueAtTime(gain, t0 + tb.attack);
@@ -50,6 +52,57 @@ export function playNote(midi, { dur = 0.6, when = 0, gain = 0.25, timbre = 'pia
     o.stop(t0 + dur + tb.release + 0.05);
   }
   return t0 + dur + tb.release;
+}
+
+let hammerBuf = null;
+function hammerBuffer(ctx) {
+  if (!hammerBuf || hammerBuf.sampleRate !== ctx.sampleRate) {
+    const n = Math.floor(ctx.sampleRate * 0.03);
+    hammerBuf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = hammerBuf.getChannelData(0);
+    let seed = 12345;
+    for (let i = 0; i < n; i++) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; d[i] = (seed / 0x3fffffff - 1) * (1 - i / n); }
+  }
+  return hammerBuf;
+}
+// Partial levels (sum about 1.3, like the old two-wave piano) and how much of each is left when the note ends.
+const PIANO_PARTIALS = [1, 0.5, 0.28, 0.16, 0.1, 0.06];
+function playPiano(ctx, midi, t0, dur, gain, tb) {
+  const f0 = midiToFreq(midi);
+  const end = t0 + dur + tb.release;
+  // Low notes ring longer, high notes die faster; the longer the key is held, the more it has faded.
+  const ring = Math.max(0.35, Math.min(1.5, 1.45 - (midi - 36) / 55));
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t0);
+  env.gain.exponentialRampToValueAtTime(gain, t0 + tb.attack);
+  env.gain.exponentialRampToValueAtTime(gain * Math.min(0.5, 0.18 * ring + 0.1), t0 + dur);
+  env.gain.exponentialRampToValueAtTime(0.0001, end);
+  env.connect(master);
+  PIANO_PARTIALS.forEach((level, i) => {
+    const k = i + 1;
+    const f = f0 * k * Math.sqrt(1 + 0.0004 * k * k); // slight stretch, like a real string
+    if (f > 12000) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.value = f;
+    g.gain.setValueAtTime(level, t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0001, level * Math.min(0.9, 0.55 * ring / k)), end);
+    o.connect(g).connect(env);
+    o.start(t0);
+    o.stop(end + 0.05);
+  });
+  // Short hammer noise.
+  const nz = ctx.createBufferSource();
+  nz.buffer = hammerBuffer(ctx);
+  const bp = ctx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = Math.min(6000, f0 * 4);
+  const ng = ctx.createGain();
+  ng.gain.value = 0.35;
+  nz.connect(bp).connect(ng).connect(env);
+  nz.start(t0);
+  return end;
 }
 
 /** Play several notes together. */

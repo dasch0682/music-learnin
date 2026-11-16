@@ -156,6 +156,8 @@ async function answer(value, button) {
   }
 }
 
+window.__test = { state: () => (q ? { ...q, notes: [...q.notes], options: [...q.options] } : null) };
+
 game.ready().then(() => {
   game.stage.replaceChildren(game.h('div', { className: 'hl-top' }, replay), answers, nextBtn);
   game.on('settings', () => { streak = 0; nextBtn.classList.remove('hl-show'); next(); });

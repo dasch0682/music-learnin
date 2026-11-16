@@ -1,6 +1,8 @@
 // Shared browser storage. All games live on the same origin, so they share this database.
 // Source of truth = append-only log of attempts. Mastery is always recomputed from it.
 
+import { activeId, ownerFn, listProfiles, dropProfile, settingsKey, settingsPrefix, getProfile } from './profiles.js';
+
 const DB_NAME = 'music-learnin';
 const DB_VERSION = 1;
 let dbp = null;
@@ -34,8 +36,8 @@ export function deviceId() {
 
 /** Record one answer. { game, skill, correct, ms?, level?, item?, detail? } → stored record.
  *  item = the precise thing asked (e.g. 'E4', 'M3'), used for per-item memorisation stats. */
-export async function logAttempt({ game, skill, correct, ms = null, level = null, item = null, detail = null }) {
-  const rec = { id: uid(), t: Date.now(), dev: deviceId(), game, skill, ok: !!correct, ms, level, item, detail };
+export async function logAttempt({ game, skill, correct, ms = null, level = null, item = null, detail = null, who = activeId() }) {
+  const rec = { id: uid(), t: Date.now(), dev: deviceId(), who, game, skill, ok: !!correct, ms, level, item, detail };
   const db = await open();
   if (!db) { memory.push(rec); return rec; }
   const tx = db.transaction('attempts', 'readwrite');
@@ -44,8 +46,9 @@ export async function logAttempt({ game, skill, correct, ms = null, level = null
   return rec;
 }
 
-/** Read attempts, optionally filtered by { game } or { skill }. Sorted by time. */
-export async function getAttempts({ game, skill } = {}) {
+/** Read attempts, optionally filtered by { game } or { skill }. Sorted by time.
+ *  Only the active profile's attempts, unless { who: <profile id> } or { who: '*' } (everybody). */
+export async function getAttempts({ game, skill, who } = {}) {
   const db = await open();
   let rows;
   if (!db) rows = memory.filter((r) => (!game || r.game === game) && (!skill || r.skill === skill));
@@ -56,12 +59,15 @@ export async function getAttempts({ game, skill } = {}) {
     else rows = await result(store.getAll());
     if (game && skill) rows = rows.filter((r) => r.skill === skill);
   }
+  if (who !== '*') { const owner = ownerFn(), id = who || activeId(); rows = rows.filter((r) => owner(r) === id); }
   return rows.sort((a, b) => a.t - b.t);
 }
 
-/** Merge a list of attempts (set union by id). Returns { added, skipped }. */
-export async function importAttempts(list) {
-  const valid = list.filter((r) => r && r.id && r.game && r.skill && typeof r.t === 'number');
+/** Merge a list of attempts (set union by id). Returns { added, skipped }.
+ *  { who } rewrites the owner of every imported attempt (merge into one profile). */
+export async function importAttempts(list, { who } = {}) {
+  let valid = list.filter((r) => r && r.id && r.game && r.skill && typeof r.t === 'number');
+  if (who) valid = valid.map((r) => ({ ...r, who }));
   const db = await open();
   let added = 0;
   if (!db) {
@@ -79,31 +85,42 @@ export async function importAttempts(list) {
   return { added, skipped: list.length - added };
 }
 
-/** Delete attempts of one game (or all when game is omitted). */
-export async function clearAttempts(game) {
+/** Delete attempts of one game (or all when game is omitted) of the active profile ({ who } for another, '*' for all). */
+export async function clearAttempts(game, { who } = {}) {
+  const all = who === '*';
+  const owner = ownerFn(), id = who || activeId();
+  const mine = (r) => (!game || r.game === game) && (all || owner(r) === id);
   const db = await open();
-  if (!db) { for (let i = memory.length - 1; i >= 0; i--) if (!game || memory[i].game === game) memory.splice(i, 1); return; }
+  if (!db) { for (let i = memory.length - 1; i >= 0; i--) if (mine(memory[i])) memory.splice(i, 1); return; }
   const tx = db.transaction('attempts', 'readwrite');
   const store = tx.objectStore('attempts');
-  if (!game) store.clear();
-  else {
-    const keys = await result(store.index('game').getAllKeys(game));
-    keys.forEach((k) => store.delete(k));
-  }
+  const rows = await result(game ? store.index('game').getAll(game) : store.getAll());
+  rows.filter(mine).forEach((r) => store.delete(r.id));
   await done(tx);
 }
 
-// Settings are small: localStorage, one key per game.
-const sKey = (game) => 'ml:settings:' + game;
-export function getSettings(game, defaults = {}) {
-  try { return { ...defaults, ...JSON.parse(localStorage.getItem(sKey(game)) || '{}') }; } catch { return { ...defaults }; }
+/** Delete a profile with its attempts and settings. False when it is the last profile. */
+export async function removeProfile(id) {
+  if (listProfiles().length < 2 || !getProfile(id)) return false;
+  await clearAttempts(null, { who: id });
+  const prefix = settingsPrefix(id);
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith(prefix)) keys.push(k); }
+  keys.forEach((k) => localStorage.removeItem(k));
+  return dropProfile(id);
 }
-export function saveSettings(game, obj) { localStorage.setItem(sKey(game), JSON.stringify(obj)); }
-export function allSettings() {
-  const out = {};
+
+// Settings are small: localStorage, one key per game and per profile (see profiles.js settingsKey).
+export function getSettings(game, defaults = {}) {
+  try { return { ...defaults, ...JSON.parse(localStorage.getItem(settingsKey(game)) || '{}') }; } catch { return { ...defaults }; }
+}
+export function saveSettings(game, obj) { localStorage.setItem(settingsKey(game), JSON.stringify(obj)); }
+/** Settings of every game, for the active profile (or { who }). */
+export function allSettings(who = activeId()) {
+  const out = {}, prefix = settingsPrefix(who);
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (k.startsWith('ml:settings:')) { try { out[k.slice(12)] = JSON.parse(localStorage.getItem(k)); } catch { /* skip */ } }
+    if (k.startsWith(prefix)) { try { out[k.slice(prefix.length)] = JSON.parse(localStorage.getItem(k)); } catch { /* skip */ } }
   }
   return out;
 }

@@ -155,6 +155,8 @@ async function answer(ok, given, button) {
   }
 }
 
+window.__test = { state: () => (q ? { ...q, ids: [...q.ids], mode: playMode() ? 'play' : 'name' } : null) };
+
 game.ready().then(() => {
   game.stage.replaceChildren(replay, hint, kbBox, names, nextBtn);
   game.on('settings', () => { streak = 0; nextBtn.classList.remove('ei-show'); next(); });

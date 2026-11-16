@@ -141,6 +141,8 @@ async function answer(type, button) {
   }
 }
 
+window.__test = { state: () => (q ? { ...q, notes: [...q.notes], types: [...q.types] } : null) };
+
 game.ready().then(() => {
   game.stage.replaceChildren(game.h('div', { className: 'ec-top' }, replay, arpBtn), choices, nextBtn);
   game.on('settings', () => { streak = 0; nextBtn.classList.remove('ec-show'); next(); });

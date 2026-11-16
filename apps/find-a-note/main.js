@@ -107,3 +107,6 @@ async function answer(option, button) {
 game.on('settings', () => { streak = 0; next(); });
 game.on('lang', renderChoices);
 next();
+
+// Test hook: the current question, expected answer included.
+window.__test = { state: () => current && { clef: current.clef, midi: current.midi, pref: current.pref, skill: current.skill, item: itemOf(current), locked, level: +game.settings.level } };
