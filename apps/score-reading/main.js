@@ -218,7 +218,7 @@ function render() {
   replayBtn.setAttribute('aria-label', game.t('replay'));
   offerBtn.classList.toggle('sr-off', !(streak >= STREAK_UP && q.level < MAX_LEVEL));
   const withInst = q.inst != null;
-  label.textContent = withInst ? game.t('inst', { n: INST[q.inst].name[game.lang] }) : q.kind === 'motif' && q.level === 5 ? `${q.dir > 0 ? '↑' : '↓'} ${q.ivl[game.lang]}` : '';
+  label.textContent = withInst ? (q.kind === 'pick' ? '→ ' : '') + game.t('inst', { n: INST[q.inst].name[game.lang] }) : q.kind === 'motif' && q.level === 5 ? `${q.dir > 0 ? '↑' : '↓'} ${q.ivl[game.lang]}` : '';
   label.hidden = !label.textContent;
   hint.textContent = q.intro ? '↓ ' + game.t('gap1') : '';
   hint.hidden = !q.intro;

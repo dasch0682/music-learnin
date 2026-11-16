@@ -1,0 +1,38 @@
+/* Build the chord. Colours come from the core variables only. */
+.ml-stage { gap: 12px; }
+.bc-head { display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 96px; justify-content: center; }
+.bc-text { text-align: center; }
+.bc-title { margin: 0; font-size: 26px; font-weight: 600; min-height: 1.2em; }
+.bc-title:empty { display: none; }
+.bc-replay.bc-small { width: 64px; height: 64px; }
+.bc-stripbox { width: 100%; min-height: 44px; }
+.bc-strip { display: flex; gap: 3px; width: 100%; }
+.bc-units { max-width: 360px; margin: 0 auto; }
+.bc-u { flex: 1 1 0; height: 28px; min-width: 0; border-radius: 5px; background: var(--accent); }
+.bc-g {
+  flex-basis: 0; min-width: 0; height: 44px; display: grid; place-items: center; border-radius: 8px;
+  font-size: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+}
+.bc-g4 { background: var(--accent); border-color: transparent; color: var(--accent-fg); }
+.bc-g3 { background: color-mix(in srgb, var(--accent) 50%, var(--bg)); border-color: transparent; color: var(--fg); }
+.bc-choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; width: 100%; }
+.bc-choices[data-n="5"], .bc-choices[data-n="6"], .bc-choices[data-n="8"] { grid-template-columns: repeat(3, 1fr); }
+.bc-choices[data-n="8"] { grid-template-columns: repeat(4, 1fr); }
+.bc-hidden { display: none; }
+.bc-choice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; padding: 6px 4px; font-size: 15px; line-height: 1.15; }
+.bc-choice b { font-size: 18px; }
+.bc-choice small { font-size: 11px; color: inherit; opacity: .8; }
+.bc-choice .bc-strip { gap: 2px; }
+.bc-choice .bc-u { height: 8px; border-radius: 2px; }
+.bc-next { visibility: hidden; }
+.bc-next.bc-show { visibility: visible; }
+
+/* Latched keys, fixed lit keys, the given key */
+.ml-key.bc-on { background: var(--accent); }
+.ml-key.bc-lit { background: color-mix(in srgb, var(--accent) 45%, #fbfaf6); }
+.ml-black.bc-lit { background: color-mix(in srgb, var(--accent) 60%, #23262c); }
+.ml-key.bc-bad { background: var(--bad); }
+.ml-key.bc-given::after {
+  content: ''; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 3px solid var(--bg); box-sizing: content-box; margin-bottom: 2px;
+}
+.ml-key.bc-on.bc-given::after { background: var(--bg); border-color: var(--accent); }

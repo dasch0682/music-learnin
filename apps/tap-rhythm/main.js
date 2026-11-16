@@ -67,7 +67,7 @@ let run = null;         // what is playing now
 let phase = 'idle';     // idle | count | listen | turn | feedback
 let offset = 0;         // audio clock − performance clock (s)
 let streak = 0, lastItem = null, failedOnce = false, gen = 0, lockUntil = 0, pending = 0, idleRuns = 0;
-let lastResult = null;
+let lastResult = null, runs = 0;
 
 const level = () => +game.settings.level;
 const auto = () => level() <= 2; // nothing to read: challenges chain by themselves
@@ -246,7 +246,7 @@ async function finish() {
   stop();
   if (r.mode === 'listen') { setPhase('idle', '▶'); return; }
   const res = judge(ch.onsets, ch.tols, r.taps);
-  lastResult = { correct: res.correct, miss: res.miss, extra: res.extra, err: res.err, taps: r.taps.length, item: ch.item, level: ch.level };
+  lastResult = { correct: res.correct, miss: res.miss, extra: res.extra, err: res.err, taps: r.taps.length, item: ch.item, level: ch.level, run: ++runs };
   lockUntil = performance.now() + 700;
   if (!r.taps.length) { // nobody played: no log
     idleRuns++;

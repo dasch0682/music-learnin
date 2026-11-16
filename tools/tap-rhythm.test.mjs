@@ -71,7 +71,7 @@ function checkOdd(s, tag) {
 
 /** Wait for a run to be set up (turnStart known), then tap at the expected times. skipLast = leave the last note out. */
 async function playRun(skipLast, extraLateMs = 0) {
-  const n0 = (await state()).result;
+  const n0 = (await state()).result?.run ?? 0;
   let s;
   for (let i = 0; i < 400; i++) { s = await state(); if (s.turnStart != null && s.phase !== 'feedback') break; await page.waitForTimeout(25); }
   if (s.turnStart == null) throw new Error('no run started');
@@ -83,7 +83,7 @@ async function playRun(skipLast, extraLateMs = 0) {
       pad.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
     }
   }, { skipLast, extraLateMs });
-  for (let i = 0; i < 400; i++) { const r = (await state()).result; if (r && r !== n0 && (await state()).phase === 'feedback') return r; await page.waitForTimeout(25); }
+  for (let i = 0; i < 400; i++) { const r = (await state()).result; if (r && r.run > n0 && (await state()).phase === 'feedback') return r; await page.waitForTimeout(25); }
   throw new Error('no result');
 }
 async function startIfIdle() {

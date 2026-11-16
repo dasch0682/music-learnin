@@ -47,7 +47,8 @@ export async function loadItemMastery(skill) { return computeItemMastery(await g
  *  keyOf maps an item to its stats key. `avoid` = key of the previous question. */
 export function pickWeak(items, stats, { keyOf = (x) => x, avoid } = {}) {
   // Large pools never repeat the previous question. Small pools may (otherwise the answer could be guessed).
-  const pool = items.length > 4 ? items.filter((x) => keyOf(x) !== avoid) : items;
+  const rest = items.length > 4 ? items.filter((x) => keyOf(x) !== avoid) : items;
+  const pool = rest.length ? rest : items; // every item may share the avoided key
   const weights = pool.map((x) => (1.15 - (stats?.get(keyOf(x))?.score ?? 0)) * (keyOf(x) === avoid ? 0.6 : 1));
   let r = Math.random() * weights.reduce((a, b) => a + b, 0);
   for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) return pool[i]; }
