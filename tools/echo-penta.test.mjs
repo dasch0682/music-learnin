@@ -22,7 +22,7 @@ const LEVELS = {
   6: { skill: 'listen.penta.long', steps: [...BLUES, 12], len: [5, 6, 7], maxLeap: 3, roots: true },
 };
 const tapPad = (midi) => page.evaluate((m) => document.querySelector(`.echo-pads [data-midi="${m}"]`).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 })), midi);
-const ready = () => page.waitForFunction(() => window.__test?.state === 'answer', null, { timeout: 40000 });
+const ready = () => page.waitForFunction(() => window.__test?.state === 'answer', null, { timeout: 15000 });
 const get = () => page.evaluate(() => window.__test);
 async function setup(level, growing) {
   await page.evaluate(([l, g]) => localStorage.setItem('ml:settings:echo-penta', JSON.stringify({ level: l, growing: g, tempo: 140 })), [level, growing]);
@@ -41,6 +41,7 @@ function checkTune(t, level, tag) {
   check(new Set(idx).size > 1, `${tag}: one note only`);
   check(idx.every((v, i) => i < 2 || !(v === idx[i - 1] && v === idx[i - 2])), `${tag}: three equal notes ${idx}`);
 }
+page.setDefaultTimeout(15000);
 await page.goto(base);
 for (let level = 1; level <= 6; level++) {
   const cfg = LEVELS[level];

@@ -109,3 +109,17 @@ The script prints console errors. `LOCALE=en-US` switches the language.
 - Microphone games: the app never listens while it plays a sound of its own (see `apps/second-voice/main.js`).
 - Two threads run through all levels, first by ear and by hand, later with their names:
   the five-note (pentatonic) scale, and tension and release (second voice, cadences).
+
+## Platform: profiles, path, rewards, updates
+
+- **`?level=N`** in a game URL: `createGame` applies it to `settings.level` (only if the game has a `level` option and N is one of its values), saves it and removes the parameter from the address.
+- **Profiles** (`profiles.js`): several learners on one device, `{ id, name, hue }` in localStorage (`ml:profiles`, active id in `ml:profile`).
+  `listProfiles()`, `activeId()`, `activeProfile()`, `setActive(id)`, `addProfile(name, { id, hue, activate })`, `renameProfile`, `onProfile(fn)`; `removeProfile(id)` in `storage.js` also erases the profile's attempts and settings (never the last profile).
+  - Every new attempt carries `who` (the active profile id). `getAttempts`, `loadMastery`, `loadItemMastery`, `clearAttempts`, `allSettings` and the exports work on the active profile; `getAttempts({ who: '*' })` returns everybody, `{ who: id }` another profile.
+  - Attempts without `who` (or with the id of a profile that no longer exists) belong to the first profile.
+  - Settings: the first profile keeps the old keys `ml:settings:<game>` (so nothing is migrated and existing tests keep working); the others use `ml:psettings:<id>:<game>`. Always go through `getSettings` / `saveSettings`.
+  - Results files (`transfer.js`): `{ profile, profiles, attempts }`, each attempt with `who`. Importing a file whose profile is unknown (or an old file while another profile is active) asks "add as a new profile / merge into <active> / cancel" (`importFile`); `applyPayload(data, { mode: 'keep' | 'new' | 'merge' })`.
+  - `createPage` (home, map) shows the profile chip in the top bar. Game pages do not.
+- **`path.js`**: `nextSteps(attempts, { count = 4, now })` → `[{ game, level?, skill, reason: 'new' | 'weak' | 'review', domain }]`, one per domain. `GAMES[i].levels` (optional) lists the skill trained at each game level, used to link `?level=`.
+- **`rewards.js`**: `dayStreak(attempts)` → `{ streak, today, week }`, `starsOf(status)`, `gameStars(skillIds, mastery)`, `starText(n)`.
+- **`update.js`**: `registerSW(home)` (used by the shell and the pages): a "new version · reload" button appears when a new service worker takes over.

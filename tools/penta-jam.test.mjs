@@ -91,8 +91,11 @@ const chordPlan = async (s, ok) => {
 plans[3] = plans[4] = plans[8] = chordPlan;
 
 await page.goto(base);
-const LEVELS = 9;
-for (let level = 1; level <= LEVELS; level++) {
+for (const L of [1, 2, 3, 4, 5, 6, 7, 8, 9, '5b']) {
+  const level = parseInt(L);
+  if (L === '5b') await page.evaluate(() => new Promise((res) => { // later stages: mark the first items as mastered
+    const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const tx = r.result.transaction('attempts', 'readwrite'); const o = tx.objectStore('attempts'); for (const item of ['4th:I-V-I-V', '7th:I-V-I-V']) for (let k = 0; k < 6; k++) o.add({ game: 'penta-jam', skill: 'play.tension', item, ok: true, level: 5, ms: 1, t: Date.now() - 1000 + k }); tx.oncomplete = res; };
+  }));
   await page.evaluate((l) => localStorage.setItem('ml:settings:penta-jam', JSON.stringify({ level: l, tempo: 140, names: false })), level);
   await page.reload();
   await page.click('.ml-start');
