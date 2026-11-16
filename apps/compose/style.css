@@ -1,0 +1,18 @@
+.ml-stage:has(.cp-grid) { gap: 10px; }
+.cp-grid, .cp-chords, .cp-slots, .cp-tools { width: 100%; max-width: 420px; }
+.cp-grid { display: flex; flex-direction: column; gap: 10px; touch-action: manipulation; user-select: none; }
+.cp-half { display: flex; flex-direction: column; gap: 3px; }
+.cp-line { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
+.cp-cell { height: 30px; min-width: 0; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); touch-action: manipulation; }
+.cp-cell.cp-bar { border-left: 2px solid var(--muted); }
+.cp-cell.cp-now { background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
+.cp-cell.cp-on { background: color-mix(in srgb, var(--accent) calc(55% + var(--r) * 45%), var(--surface)); border-color: var(--accent); }
+.cp-cell.cp-on.cp-now { outline: 2px solid var(--fg); outline-offset: -2px; }
+.cp-chords { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.cp-chords[hidden] { display: none; }
+.cp-chord { min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 17px; font-weight: 600; }
+.cp-chord.cp-now { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.cp-slots, .cp-tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.cp-slot { min-height: 40px; padding: 0 4px; }
+.cp-play { min-height: 52px; width: 100%; max-width: 420px; }
+.cp-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }

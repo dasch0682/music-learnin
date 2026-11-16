@@ -70,7 +70,7 @@ for (let level = 1; level <= 6; level++) {
   const seen = new Set();
   for (let round = 0; round < ROUNDS[level]; round++) {
     const s = await state();
-    seen.add(s.item);
+    seen.add(s.item); if (process.env.V) console.log(level, round, s.item);
     rules(level, s);
     check(await page.$$eval('.rd-pbtn', (e) => e.length) === PAL[level].length, `L${level}: palette buttons`);
     check(await page.$$eval('.rd-slot', (e) => e.length) === 4, `L${level}: four empty slots`);

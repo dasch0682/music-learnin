@@ -64,7 +64,8 @@ function render() {
       return b;
     }));
   }
-  const pos = posOf();
+  const keep = marks ? entered.slice(0, marks.indexOf(false)) : entered; // the next press drops what was wrong
+  const pos = keep.reduce((a, id) => a + CELLS[id].len, 0);
   for (const b of palBox.children) b.disabled = locked || !fits(b.dataset.cell, pos, q.barLen) || pos >= q.total - 1e-6;
   undo.disabled = locked || !entered.length;
 }

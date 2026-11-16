@@ -3,6 +3,7 @@
 import { createGame } from '@core/shell.js';
 import { audio, playNote } from '@core/audio.js';
 import { noteName, mod, pick, CHORDS } from '@core/music.js';
+import { loadItemMastery, pickWeak } from '@core/mastery.js';
 import { createBacking } from './engine.js';
 import './style.css';
 
@@ -16,6 +17,7 @@ const game = createGame({
     home: L('Your turn. Finish on the dot.', 'À toi. Finis sur le point.'),
     open: L('Your turn. Finish on the ring.', 'À toi. Finis sur l’anneau.'),
     h3: L('On beat one, play a glowing pad.', 'Sur le premier temps, joue une touche qui brille.'),
+    ht: L('Striped pad on the tense chord. When home returns, step next to it.', 'Touche rayée sur l’accord tendu. Au retour du premier accord, joue la touche voisine.'),
     h5: L('New chord: glowing pad. Round pad: just passing.', 'Nouvel accord : touche qui brille. Touche ronde : en passant.'),
     h6: L('Play with one colour, then another.', 'Joue avec une couleur, puis une autre.'),
     h7: L('Beat one: land on a glowing pad.', 'Premier temps : arrive sur une touche qui brille.'),
@@ -31,16 +33,18 @@ const game = createGame({
       { value: 2, label: L('2 · Question and answer', '2 · Question et réponse') },
       { value: 3, label: L('3 · Three chords', '3 · Trois accords') },
       { value: 4, label: L('4 · Other keys, minor colour', '4 · Autres tonalités, couleur mineure') },
-      { value: 5, label: L('5 · Blues', '5 · Blues') },
-      { value: 6, label: L('6 · Modal colours', '6 · Couleurs modales') },
-      { value: 7, label: L('7 · Jazz: ii–V–I', '7 · Jazz : ii–V–I') },
-      { value: 8, label: L('8 · Playing outside', '8 · Jouer « outside »') },
+      { value: 5, label: L('5 · Tension and release', '5 · Tension et détente') },
+      { value: 6, label: L('6 · Blues', '6 · Blues') },
+      { value: 7, label: L('7 · Modal colours', '7 · Couleurs modales') },
+      { value: 8, label: L('8 · Jazz: ii–V–I', '8 · Jazz : ii–V–I') },
+      { value: 9, label: L('9 · Playing outside', '9 · Jouer « outside »') },
     ] },
     { key: 'tempo', label: L('Tempo', 'Tempo'), type: 'range', min: 50, max: 140, step: 5, default: 80 },
     { key: 'names', label: L('Note names on pads', 'Nom des notes sur les touches'), type: 'toggle', default: false },
   ],
 });
 const h = game.h;
+const MAX_LEVEL = 9;
 
 // ---------- Music data ----------
 const PCS = { C: 0, D: 2, 'E♭': 3, E: 4, F: 5, G: 7, A: 9, 'B♭': 10, B: 11 };
@@ -103,6 +107,22 @@ const JAZZ = [
 const DM7 = chord('D', 'min7', [53, 57, 60, 64]);
 const G7 = chord('G', 'dom7', [53, 55, 59, 62]);
 const C = chord('C', 'maj');
+// Tension and release: one extra pad (the fourth, then the seventh) outside the five notes.
+const EXTRA = { '4th': 65, '7th': 71 };
+const TENSION_STAGES = [['4th:I-V-I-V'], ['7th:I-V-I-V'], ['4th:I-IV-V-I', '7th:I-IV-V-I']];
+const TENSION_BARS = { 'I-V-I-V': [['C', 'maj'], ['G', 'maj'], ['C', 'maj'], ['G', 'maj']], 'I-IV-V-I': [['C', 'maj'], ['F', 'maj'], ['G', 'maj'], ['C', 'maj']] };
+const TENSION_GOAL = { 'I-V-I-V': { tens: [1, 3], res: [2] }, 'I-IV-V-I': { tens: [2], res: [3] } };
+function tensionSpec(item) {
+  const [x, form] = item.split(':');
+  const xm = EXTRA[x];
+  const pads = [...PADS.C, xm].sort((a, b) => a - b);
+  const i = pads.indexOf(xm);
+  // Release: a neighbouring pad that belongs to the home chord.
+  const resMidis = [pads[i - 1], pads[i + 1]].filter((m) => m != null && [0, 4, 7].includes(pc(m)));
+  // tones come from the five notes only: the extra pad never glows.
+  const bars = TENSION_BARS[form].map(([n, t]) => ({ ...bar(chord(n, t), PADS.C), pads, extra: pc(xm) }));
+  return { item, xm, resMidis, ...TENSION_GOAL[form], bars };
+}
 const rep = (n, x) => Array.from({ length: n }, () => x);
 
 // ---------- State ----------
@@ -110,7 +130,7 @@ const st = {
   running: false, paused: false, level: 0, tempo: 0, lv: null, ctx: null, bus: null, timer: 0,
   t0: 0, spb: 1, step: 0, ui: [], pending: [], specs: new Map(), taps: [],
   cur: null, shown: null, notes: [], set: 'Dm', outside: false, phase: '', lastTap: 0,
-  recent: [], homeWins: 0, canLevelUp: false, results: [],
+  recent: [], homeWins: 0, stats: new Map(), lastItem: null, canLevelUp: false, results: [],
 };
 const lat = () => Math.min(0.25, st.ctx?.outputLatency || st.ctx?.baseLatency || 0);
 /** Position of "now" in beats since bar 0, as the player hears it. */
@@ -120,9 +140,10 @@ const posNow = () => (st.running ? (st.ctx.currentTime - lat() - st.t0) / st.spb
 const win = () => ({ a: Math.max(0.3, 0.15 / st.spb), b: Math.max(0.45, 0.22 / st.spb) });
 const tapsIn = (a, b) => st.taps.filter((x) => x.p >= a && x.p < b);
 /** A note of `pcs` played on beat B (within tolerance), or held across it. */
-function landed(B, pcs) {
+const landed = (B, pcs) => landedBy(B, (x) => pcs.includes(pc(x.midi)));
+function landedBy(B, test) {
   const { a, b } = win();
-  return st.taps.some((x) => pcs.includes(pc(x.midi)) && !x.outside
+  return st.taps.some((x) => test(x) && !x.outside
     && ((x.p >= B - a && x.p <= B + b) || (x.p < B - a && (x.up == null || x.up > B))));
 }
 const dots = (n, on) => Array.from({ length: n }, (_, i) => ({ kind: 'dot', on: i < on }));
@@ -177,6 +198,26 @@ const LEVELS = {
     eval: evalBars,
   },
   5: {
+    skill: 'play.tension', bars: 4, style: 'pop', hint: 'ht', symbols: true, glow: true,
+    spec() {
+      let stages = [];
+      for (const g of TENSION_STAGES) {
+        stages = stages.concat(g);
+        if (!g.every((k) => (st.stats.get(k)?.score ?? 0) >= 0.5)) break;
+      }
+      const item = pickWeak(stages, st.stats, { avoid: st.lastItem });
+      st.lastItem = item;
+      return tensionSpec(item);
+    },
+    eval(spec) {
+      const ev = [...spec.tens.map((i) => ({ i, t: 1 })), ...spec.res.map((i) => ({ i, t: 0 }))].sort((a, b) => a.i - b.i);
+      const on = ev.map((e) => landedBy(spec.start + 4 * e.i, e.t ? (x) => x.midi === spec.xm : (x) => spec.resMidis.includes(x.midi)));
+      const got = (t) => ev.filter((e, k) => e.t === t && on[k]).length;
+      const ok = got(0) === spec.res.length && got(1) >= spec.tens.length - (spec.tens.length > 1 ? 1 : 0);
+      return { n: tapsIn(spec.start - 0.5, spec.end - 0.5).length, ok, chips: ev.map((e, k) => ({ kind: e.t ? 'blue' : 'dot', on: on[k] })), detail: { tension: got(1), release: got(0) } };
+    },
+  },
+  6: {
     skill: 'play.penta.blues', bars: 4, style: 'shuffle', swing: true, hint: 'h5', symbols: true, glow: true, blue: 3,
     spec: (idx) => ({ ...BLUES[idx % 3] }),
     eval(spec) {
@@ -190,7 +231,7 @@ const LEVELS = {
       return { n: tapsIn(spec.start - 0.5, spec.end - 0.5).length, ok: n >= Math.ceil(hits.length / 2) && blue, chips: [...hits.map((on) => ({ kind: 'dot', on })), { kind: 'blue', on: blue }], detail: { hits: hits.map(Number), blue } };
     },
   },
-  6: {
+  7: {
     skill: 'play.penta.modal', bars: 4, style: 'vamp', hint: 'h6', symbols: true, sets: true,
     spec: () => ({ item: 'two-colours', bars: [DM7, G7, DM7, G7].map((ch) => bar(ch, PADS.Dm)) }),
     eval(spec) {
@@ -200,12 +241,12 @@ const LEVELS = {
       return { n: all.length, ok: chips.filter((c) => c.on).length >= 2, chips, detail: count };
     },
   },
-  7: {
+  8: {
     skill: 'play.penta.jazz', bars: 4, style: 'swing', swing: true, hint: 'h7', symbols: true, glow: true,
     spec: () => ({ item: 'ii-V-I', bars: JAZZ }),
     eval: evalBars,
   },
-  8: {
+  9: {
     skill: 'play.penta.outside', bars: 4, style: 'vamp', hint: 'h8', symbols: true, glow: true, hold: true,
     spec: () => ({ item: 'side-slip', bars: rep(4, bar(DM7, PADS.Dm)) }),
     eval(spec) {
@@ -345,7 +386,9 @@ function decorate() {
     el.textContent = game.settings.names ? noteName(midi, { lang, pref: 'flat' }) : '';
     el.classList.toggle('pj-tone', tone);
     el.classList.toggle('pj-guide', tone && b.guides.includes(p));
-    el.classList.toggle('pj-dim', !!lv.glow && !st.outside && !tone);
+    const extra = b.extra === p;
+    el.classList.toggle('pj-x', extra);
+    el.classList.toggle('pj-dim', !!lv.glow && !st.outside && !tone && !extra);
     el.classList.toggle('pj-blue', lv.blue === p);
     const mark = st.shown?.target === p ? st.shown.item : null;
     if (mark) el.dataset.mark = mark; else delete el.dataset.mark;
@@ -441,10 +484,10 @@ function judge(spec) {
   }
   const rec = { skill: lv.skill, correct: r.ok, ms: Math.round((spec.end - spec.start) * st.spb * 1000), level: st.level, item: spec.item, detail: r.detail };
   st.results.push(rec);
-  game.attempt({ ...rec, silent: true }).catch(() => {});
+  game.attempt({ ...rec, silent: true }).then(() => { if (lv.skill === 'play.tension') loadItemMastery(lv.skill).then((m) => { st.stats = m; }); }).catch(() => {});
   lv.after?.(spec, r);
   st.recent = [...st.recent, r.ok].slice(-6);
-  if (!st.canLevelUp && st.level < 8 && st.recent.length >= 5 && st.recent.filter(Boolean).length >= 5) {
+  if (!st.canLevelUp && st.level < MAX_LEVEL && st.recent.length >= 5 && st.recent.filter(Boolean).length >= 5) {
     st.canLevelUp = true;
     if (nextEl) nextEl.hidden = false;
   }
@@ -462,7 +505,7 @@ function stop() {
 
 function start() {
   stop();
-  const level = Math.max(1, Math.min(8, +game.settings.level || 1));
+  const level = Math.max(1, Math.min(MAX_LEVEL, +game.settings.level || 1));
   if (level !== st.level) { st.recent = []; st.canLevelUp = false; st.homeWins = 0; st.set = 'Dm'; }
   st.level = level;
   st.tempo = +game.settings.tempo || 80;
@@ -500,11 +543,12 @@ window.__test = {
   get spb() { return st.spb; }, get results() { return st.results; }, get notes() { return st.notes; },
   get canLevelUp() { return st.canLevelUp; }, get homeWins() { return st.homeWins; },
   pos: posNow,
-  spec: (idx) => { const s = getSpec(idx); return { start: s.start, end: s.end, item: s.item, target: s.target ?? null, changes: s.changes ?? null, bars: s.bars.map((b) => ({ pads: b.pads, tones: b.tones, guides: b.guides, sym: b.ch.sym })) }; },
+  spec: (idx) => { const s = getSpec(idx); return { start: s.start, end: s.end, item: s.item, target: s.target ?? null, xm: s.xm ?? null, resMidis: s.resMidis ?? null, tens: s.tens ?? null, res: s.res ?? null, changes: s.changes ?? null, bars: s.bars.map((b) => ({ pads: b.pads, tones: b.tones, guides: b.guides, sym: b.ch.sym })) }; },
   bars: () => st.lv.bars,
 };
 
 await game.ready();
+st.stats = await loadItemMastery('play.tension').catch(() => new Map());
 build();
 start();
 game.on('settings', () => {

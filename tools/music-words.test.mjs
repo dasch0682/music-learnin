@@ -103,9 +103,6 @@ for (let level = 1; level <= 6; level++) {
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   console.log(`L${level}`, [...seen].join(' '), [...modes].join(' '));
 }
-await page.evaluate(() => localStorage.setItem('ml:settings:music-words', JSON.stringify({ level: 4 })));
-await page.reload(); await page.click('.ml-start'); await page.waitForTimeout(400);
-await page.evaluate(() => localStorage.setItem('ml:lang', 'en'));
 check(!errors.length, 'console: ' + errors.join(' | '));
 await browser.close();
 console.log(failed ? `${failed} failure(s)` : 'all good');

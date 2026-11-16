@@ -21,7 +21,7 @@ const T = {
   all: L('All games', 'Tous les jeux'),
 };
 
-const stars = (n) => h('span', { className: 'hub-stars', textContent: starText(n), 'aria-hidden': 'true' });
+const stars = (n) => (n ? h('span', { className: 'hub-stars', textContent: starText(n), 'aria-hidden': 'true' }) : null);
 
 async function render(main) {
   const attempts = await getAttempts();
@@ -60,12 +60,12 @@ async function render(main) {
           bar);
       })));
   });
-  main.replaceChildren(
+  main.replaceChildren(...[
     steps.length ? today : null,
     steps.length ? h('h2', { textContent: tr(T.all) }) : null,
     ...sections.filter(Boolean),
     h('a', { className: 'ml-btn hub-map', href: './mastery-map/', textContent: tr(L('Mastery map', 'Carte de maîtrise')) }),
-  );
+  ].filter(Boolean));
 }
 
 createPage({ home: './', title: 'Music Learnin', render });
