@@ -175,6 +175,7 @@ async function next() {
 function tap(roman) {
   if (!q || locked) return;
   stop();
+  clearTimeout(timer); // a pending replay must not start under the player's hands
   playChord(voice(q.key, roman), { dur: 0.9, gain: 0.36 });
   if (marks) { built = built.map((r, i) => (marks[i] ? r : null)); marks = null; } // keep what was right
   const i = built.indexOf(null);

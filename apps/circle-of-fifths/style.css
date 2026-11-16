@@ -1,0 +1,26 @@
+/* Circle of fifths */
+.ml-stage:has(.cf-circlebox) { gap: 10px; }
+.cf-circlebox { width: 100%; max-width: 360px; }
+.cf-circle { width: 100%; height: auto; display: block; user-select: none; touch-action: manipulation; }
+.cf-seg { cursor: pointer; }
+.cf-seg path { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; transition: fill .15s; }
+.cf-label { fill: var(--fg); font: 600 15px system-ui, sans-serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.cf-m .cf-label { font-size: 13px; }
+.cf-two { font-size: 11px; }
+.cf-hit { fill: transparent; }
+.cf-seg:active path { fill: color-mix(in srgb, var(--accent) 25%, var(--surface)); }
+.cf-given path { fill: var(--accent); }
+.cf-given .cf-label { fill: var(--accent-fg); }
+.cf-found path { fill: var(--good); }
+.cf-found .cf-label { fill: var(--bg); }
+.cf-wrong path { fill: var(--bad); }
+.cf-wrong .cf-label { fill: var(--bg); }
+.cf-prompt { min-height: 1.4em; }
+.cf-staff { width: 100%; max-width: 250px; }
+.cf-choices { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; width: 100%; max-width: 440px; }
+.cf-choices:empty { display: none; }
+.cf-choices .ml-btn { flex: 1 1 72px; font-size: 22px; min-height: 64px; }
+.ml-stage .ml-round { width: 64px; height: 64px; }
+.ml-round svg { width: 28px; height: 28px; }
+.cf-next { visibility: hidden; }
+.cf-next.cf-show { visibility: visible; }
