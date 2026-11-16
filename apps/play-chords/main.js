@@ -61,6 +61,7 @@ const itemOf = (q) => {
   const ch = q.chords[0];
   return ch.type + (ch.inv ? ':inv' + ch.inv : '');
 };
+const fullKey = (q) => JSON.stringify(q.chords);
 const pcsOf = (ch) => CHORDS[ch.type].steps.map((s) => mod(ch.root + s, 12));
 const bassOf = (ch) => (ch.inv ? pcsOf(ch)[ch.inv] : null);
 
@@ -102,7 +103,7 @@ const offerBtn = h('button', { className: 'ml-btn ml-primary pc-offer pc-off' })
 
 let started = false, gen = 0;
 let current = null, step = 0, locked = true, wrongLogged = false, t0 = 0;
-let streak = 0, last = null, win = null, kb = null, kbKey = '';
+let streak = 0, last = null, lastFull = null, win = null, kb = null, kbKey = '';
 const latched = new Set();
 const levelNow = () => (pools[+game.settings.level] ? +game.settings.level : 1);
 const chordNow = () => current.chords[step];
@@ -168,8 +169,13 @@ async function next() {
   const level = levelNow();
   const stats = await loadItemMastery(skillOf(level));
   if (my !== gen) return;
-  current = pickWeak(pools[level](), stats, { keyOf: (q) => itemOf(q), avoid: last });
+  const all = pools[level]();
+  // Items are coarse (a chord type, a cadence), so the same one may come back; never the exact same chord twice in a row.
+  const fresh = all.filter((q) => fullKey(q) !== lastFull);
+  const keys = new Set(fresh.map(itemOf));
+  current = pickWeak(fresh, stats, { keyOf: itemOf, avoid: keys.size > 1 ? last : undefined });
   last = itemOf(current);
+  lastFull = fullKey(current);
   step = 0;
   wrongLogged = false;
   latched.clear();

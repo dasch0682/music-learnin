@@ -222,7 +222,6 @@ function render() {
   label.hidden = !label.textContent;
   hint.textContent = q.intro ? '↓ ' + game.t('gap1') : '';
   hint.hidden = !q.intro;
-  replayBtn.hidden = q.kind !== 'motif';
   if (q.kind === 'play') {
     const a = holder();
     staves.replaceChildren(a);
@@ -254,6 +253,7 @@ function render() {
     const a = holder('sr-source'), b = holder('sr-target');
     staves.replaceChildren(a, b);
     drawStaff(a, { clef: 'treble', keySig: q.level === 6 ? q.writtenSig : 0, notes: q.source.map((n) => headOf(n, { acc: q.level === 6 ? false : undefined })), width: 260 });
+    a.append(replayBtn);
     drawTarget();
     showKeyboard();
   }
@@ -357,6 +357,6 @@ window.__test = {
 
 game.ready().then(() => {
   started = true;
-  game.stage.replaceChildren(label, hint, staves, replayBtn, answerBox, offerBtn);
+  game.stage.replaceChildren(label, hint, staves, answerBox, offerBtn);
   next();
 });

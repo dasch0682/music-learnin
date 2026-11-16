@@ -9,8 +9,9 @@
 .sr-choices .ml-btn { min-height: 100px; padding: 4px 6px; color: var(--fg); }
 .sr-choices .ml-btn.ml-right, .sr-choices .ml-btn.ml-wrong { color: var(--bg); }
 .sr-choices .ml-staff { color: inherit; pointer-events: none; }
-.sr-replay { align-self: center; }
-.sr-replay[hidden] { display: none; }
+.sr-source { position: relative; }
+.sr-replay { position: absolute; right: 2px; top: 2px; width: 44px; height: 44px; font-size: 16px; }
+.sr-answer .ml-keyboard { height: 150px; }
 .sr-offer { min-height: 48px; }
 .sr-offer.sr-off { visibility: hidden; }
 .sr-label[hidden], .sr-gap[hidden] { display: none; }
