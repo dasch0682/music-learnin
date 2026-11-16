@@ -2,9 +2,12 @@
 // works offline after the first visit, and results survive an export/import round trip.
 // Usage: npm run build && npx vite preview --port 4173 &  then  node tools/smoke.mjs [screenshot-dir]
 import { chromium } from 'playwright-core';
+import { readdirSync, existsSync } from 'node:fs';
 const base = `http://localhost:${process.env.PORT || 4173}`;
 const dir = process.argv[2];
-const pages = ['', 'mastery-map/', 'find-a-note/', 'high-low/', 'echo-penta/', 'ear-intervals/', 'ear-chords/', 'ear-cadences/', 'sing-match/', 'second-voice/', 'penta-jam/', 'play-the-note/', 'tap-rhythm/'];
+// Every page of the build: home, then each folder of dist/ that has an index.html.
+const dist = new URL('../dist/', import.meta.url);
+const pages = ['', ...readdirSync(dist, { withFileTypes: true }).filter((d) => d.isDirectory() && existsSync(new URL(d.name + '/index.html', dist))).map((d) => d.name + '/')];
 const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
 let failed = 0;
 const fail = (msg) => { failed++; console.log('FAIL', msg); };
@@ -50,5 +53,5 @@ for (const [scheme, locale] of [['dark', 'fr-FR'], ['light', 'en-US']]) {
   await ctx.close();
 }
 await browser.close();
-console.log(failed ? `${failed} failure(s)` : 'all good');
+console.log(failed ? `${failed} failure(s)` : `all good (${pages.length} pages)`);
 process.exit(failed ? 1 : 0);
