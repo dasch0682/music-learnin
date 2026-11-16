@@ -92,7 +92,7 @@ function rules(level, s) {
 const key = (voice, midi) => `.tv-kb [data-midi="${midi}"]`;
 async function select(v) { await page.click(`.tv-staff[data-voice="${v}"]`); }
 async function enter(v, list) { await select(v); for (const m of list) await page.click(key(v, m)); }
-async function settle() { await page.waitForFunction(() => window.__test.state().marks && !window.__test.state().locked); }
+async function settle() { await page.waitForFunction(() => { const t = window.__test.state(); return t.marks && (!t.locked || [...t.marks.top, ...t.marks.bottom].every(Boolean)); }); }
 const other = (s, v, not) => { const w = []; for (let m = s.ranges[v][0]; m <= s.ranges[v][1]; m++) if (NAT.includes(pc(m)) && m !== not) w.push(m); return w[(not * 7) % w.length]; };
 
 await page.goto(base);
