@@ -45,7 +45,8 @@ function theory(s, level, voice) {
   const [lo, hi] = VOICES[voice];
   const mid = (Math.min(...m) + Math.max(...m)) / 2;
   check(Math.abs(mid - (lo + hi) / 2) <= 6, `${tag}: melody not in the ${voice} voice (centre ${mid})`);
-  check((s.clef === 'bass') === (mid < 57), `${tag}: clef ${s.clef} for centre ${mid}`);
+  const mean = m.reduce((x, y) => x + y, 0) / m.length; // the game picks the clef from the average pitch
+  check((s.clef === 'bass') === (mean < 57), `${tag}: clef ${s.clef} for average ${mean}`);
   if (level <= 2) {
     check(m.every((x) => [0, 2, 4, 7, 9].includes(mod(x, 12))) && s.keySig === 0, `${tag}: not the C pentatonic scale`);
     check(m.every((x, i) => !i || Math.abs(x - m[i - 1]) <= 3), `${tag}: leap bigger than a pentatonic step`);

@@ -109,7 +109,8 @@ function candidate(level) {
   }
   // Level 6: minor, six notes, the raised seventh (leading tone) once, then the tonic.
   const w = walk(4, pick([0, 2, 4]), [-2, -1, 1, 2], 0, 7);
-  if (!w || ![4, 5, 7].includes(w[3])) return null;
+  // The natural seventh is left out: only the raised one appears, as the single accidental.
+  if (!w || ![4, 5, 7].includes(w[3]) || w.includes(6)) return null;
   return { key: MINORS[pick(Object.keys(MINORS))], degs: [...dg(w), { d: 6, up: true }, { d: 7 }], pent: false };
 }
 

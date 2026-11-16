@@ -31,7 +31,7 @@ function expectedFor(s) {
     const a = +m[1], b = +m[2];
     beats = Math.min(a, b); cycles = 2; L = even(b, beats); R = even(a, beats); if (m[3]) mult = 1.4;
   }
-  const bpm = Math.round(TEMPO * mult);
+  const bpm = Math.min(160, Math.max(40, Math.round(TEMPO * mult))); // the game keeps the tempo between 40 and 160
   const q = 60000 / bpm;
   const rep = (l) => Array.from({ length: cycles }, (_, c) => l.map((t) => Math.round((t + c * beats) * q))).flat();
   return { bpm, L: rep(L), R: rep(R) };
