@@ -7,6 +7,7 @@ import { getLang, setLang, onLang, tr, createT } from './i18n.js';
 import { getSettings, saveSettings, logAttempt, clearAttempts } from './storage.js';
 import { exportSettings, exportResults, importFile } from './transfer.js';
 import { audio, sfx } from './audio.js';
+import { registerSW } from './update.js';
 
 const UI = {
   settings: { en: 'Settings', fr: 'Réglages' },
@@ -42,7 +43,7 @@ function head(home) {
   const add = (tag, attrs) => document.head.append(Object.assign(document.createElement(tag), attrs));
   add('link', { rel: 'manifest', href: home + 'manifest.webmanifest' });
   add('link', { rel: 'icon', href: home + 'icon.svg' });
-  if (import.meta.env.PROD && 'serviceWorker' in navigator) navigator.serviceWorker.register(home + 'sw.js').catch(() => {});
+  if (import.meta.env.PROD) registerSW(home);
 }
 
 const h = (tag, props = {}, ...kids) => {
@@ -142,6 +143,7 @@ export function createGame(config) {
   async function doImport(kind) {
     try {
       const r = await importFile(kind);
+      if (r.cancelled) return;
       if (r.kind === 'results') say(ui('imported', { n: r.added }));
       else { Object.assign(settings, getSettings(config.id, defaults)); say(ui('importedSettings')); emit('settings'); renderDialog(); }
     } catch { say(ui('badFile')); }

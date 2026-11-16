@@ -16,7 +16,7 @@ const listening = async () => { for (let i = 0; i < 200; i++) { const s = await 
 const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'second-voice').sort((x, y) => x.t - y.t)); }; }));
 
 await page.goto(base);
-for (let level = 1; level <= 10; level++) {
+for (let level = 1; level <= 11; level++) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:second-voice', JSON.stringify({ level: l, voice: 'child', tolerance: 50, phones: false })), level);
   await page.reload();
   await page.click('.ml-start');
@@ -25,6 +25,22 @@ for (let level = 1; level <= 10; level++) {
   let s = await listening();
   const item = s.item;
   if (dir && [7, 9].includes(level)) await page.screenshot({ path: `${dir}/sv-${level}.png` });
+  if (level === 10) { // chain: bass steps down at each tension, singer holds then steps down
+    const [kind, links] = item.split(':');
+    const [rest, tens] = kind === '7-6' ? [[8, 9], [10, 11]] : [[3, 4], [5, 6]];
+    const m12 = (x) => ((x % 12) + 12) % 12;
+    check(s.steps.length === 1 + 2 * +links, `L10: step count ${s.steps.length}`);
+    s.steps.forEach((st, i) => {
+      const iv = m12(st.targets[0] - st.other[0]);
+      const t = i > 0 && i % 2 === 1;
+      check(st.kind === (t ? 'tension' : 'rest') && (t ? tens : rest).includes(iv), `L10: step ${i} kind ${st.kind} interval ${iv}`);
+      if (i > 0) {
+        const p = s.steps[i - 1], db = p.other[0] - st.other[0], du = p.targets[0] - st.targets[0];
+        if (t) check(du === 0 && (db === 1 || db === 2), `L10: tension ${i} bass ${db} voice ${du}`);
+        else check(db === 0 && (du === 1 || du === 2), `L10: release ${i} bass ${db} voice ${du}`);
+      }
+    });
+  }
   // 1. The app's own note must not count as a wrong note (speaker leak).
   await feed(s.steps[0].other[0], 2600);
   s = await state();

@@ -1,0 +1,36 @@
+/* Write the rhythm. Colours: core variables only. */
+.rd-score { width: 100%; max-width: 560px; }
+.rd-svg { width: 100%; height: auto; display: block; color: var(--fg); overflow: visible; }
+.rd-fill { fill: var(--fg); stroke: none; }
+.rd-open { fill: none; stroke: var(--fg); }
+.rd-stroke { stroke: var(--fg); stroke-linecap: butt; }
+.rd-rest path { fill: none; stroke: var(--fg); stroke-linecap: round; stroke-linejoin: round; }
+.rd-line { stroke: var(--line); stroke-width: 1.5; }
+.rd-meter { fill: var(--fg); font: 700 21px Georgia, "Times New Roman", serif; }
+.rd-three { fill: var(--fg); font: italic 700 12px Georgia, "Times New Roman", serif; }
+.rd-slot { fill: none; stroke: var(--line); stroke-width: 2; stroke-dasharray: 5 4; }
+.rd-slot.rd-next { stroke: var(--accent); }
+.rd-ok .rd-fill { fill: var(--good); }
+.rd-ok .rd-open, .rd-ok .rd-stroke, .rd-ok .rd-rest path { stroke: var(--good); }
+.rd-ok .rd-three { fill: var(--good); }
+.rd-bad .rd-fill { fill: var(--bad); }
+.rd-bad .rd-open, .rd-bad .rd-stroke, .rd-bad .rd-rest path { stroke: var(--bad); }
+.rd-bad .rd-three { fill: var(--bad); }
+.rd-bad .rd-rest .rd-fill { fill: var(--bad); }
+
+.rd-pal { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; max-width: 440px; }
+.rd-pbtn {
+  min-height: 72px; min-width: 72px; padding: 4px 8px; border-radius: var(--radius); border: 1px solid var(--line);
+  background: var(--surface); color: var(--fg); display: grid; place-items: center;
+}
+.rd-pbtn:active { transform: scale(.96); }
+.rd-pbtn:disabled { opacity: .3; }
+.rd-cell { height: 62px; width: auto; display: block; overflow: visible; color: var(--fg); }
+.rd-row { display: flex; align-items: center; justify-content: center; gap: 24px; }
+.rd-undo {
+  width: 52px; height: 52px; flex: none; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  display: grid; place-items: center; padding: 0;
+}
+.rd-undo:disabled { opacity: .35; }
+.rd-next { visibility: hidden; }
+.rd-next.rd-show { visibility: visible; }

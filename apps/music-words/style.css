@@ -1,0 +1,20 @@
+/* Music words */
+.mw-card { min-height: 96px; display: grid; place-items: center; color: var(--fg); }
+.mw-card:empty { display: none; }
+.mw-card svg { width: 96px; height: 96px; }
+.mw-card .mw-sign { font-size: 56px; }
+.mw-sign { font-family: 'Noto Serif', Georgia, serif; font-style: italic; font-weight: 700; }
+.mw-card .mw-word { font-size: 34px; font-weight: 600; }
+.mw-choices { display: grid; grid-template-columns: repeat(var(--cols, 2), 1fr); gap: 12px; width: 100%; max-width: 440px; }
+.mw-choices .ml-btn { font-size: 18px; line-height: 1.2; min-height: 64px; padding: 8px; position: relative; }
+.mw-choices.mw-big .ml-btn { font-size: 44px; min-height: 120px; }
+.mw-choices .mw-ic { display: grid; place-items: center; }
+.mw-choices .mw-ic svg { width: 56px; height: 56px; }
+.mw-choices .mw-ic .mw-sign { font-size: 34px; }
+.mw-choices .ml-btn.mw-lit { outline: 4px solid var(--accent); }
+.mw-choices .ml-right, .mw-choices .ml-wrong { color: var(--bg); }
+.mw-badge { position: absolute; top: 4px; right: 8px; font-size: 14px; font-weight: 700; }
+.mw-def { min-height: 44px; margin: 0; text-align: center; font-size: 16px; color: var(--muted); max-width: 440px; }
+.mw-def b { color: var(--fg); }
+.mw-next { visibility: hidden; }
+.mw-next.mw-show { visibility: visible; }

@@ -1,0 +1,10 @@
+.tn-top { display: flex; flex-direction: column; align-items: center; gap: 14px; min-height: 130px; justify-content: center; }
+.tn-replay:disabled { opacity: .35; }
+.tn-dots { display: flex; gap: 8px; min-height: 12px; flex-wrap: wrap; justify-content: center; }
+.tn-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--muted); transition: background .12s; }
+.tn-dot.tn-on { background: var(--good); border-color: var(--good); }
+.tn-name { min-height: 1.6em; font-size: 20px; text-align: center; margin: 0; }
+.tn-kb { width: 100%; }
+.tn-kb .ml-key.tn-start { box-shadow: inset 0 -10px 0 var(--accent); }
+.tn-next { min-height: 48px; display: flex; align-items: center; justify-content: center; }
+.tn-kb.ml-disabled { opacity: 1; }

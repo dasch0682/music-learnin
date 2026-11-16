@@ -52,7 +52,7 @@ A game may add its own `style.css` (import it from `main.js`), using only these 
 
 ## audio.js
 
-`audio()`, `playNote(midi, { dur, when, gain, timbre })` (timbres: piano, pad, pluck, bass, voice),
+`audio()`, `playNote(midi, { dur, when, gain, timbre })` (timbres: piano (partials, hammer noise, pitch-dependent decay), pad, pluck, bass, voice),
 `playChord(midis, opts)`, `playSeq(items, { bpm, beats, timbre })` → Promise (items: midi | [chord] | null rest),
 `click({ when, accent })`, `tap({ when })`, `sfx('good'|'bad')`, `startDrone(midis)` → stop(), `audioTime()`, `wait(ms)`.
 `when` is in seconds from now; use it with `audioTime()` for tight rhythm scheduling.
@@ -74,6 +74,11 @@ A game may add its own `style.css` (import it from `main.js`), using only these 
 `createKeyboard(container, { from, to, onDown(midi), onUp, labels, sound, timbre })` and
 `createPads(container, { notes: [midi], onDown, onUp, labels, sound, timbre })`.
 Both return `{ el, flash(midi, 'ml-hit'|'ml-good'|'ml-bad'|'ml-hint', ms), setEnabled(bool) }`.
+Both also react to a real MIDI keyboard (note-on/off of their own keys call `onDown`/`onUp` and light the key); no effect without a device.
+
+## midi.js
+
+`onMidi(fn)` → unsubscribe; `fn({ type: 'on'|'off', midi, velocity, channel })`. First call requests Web MIDI (silent if absent or refused; hot-plug handled). `midiSupported()`, `midiInputs()`, `parseMidi(bytes)`.
 
 ## pitch.js
 

@@ -119,13 +119,15 @@ export const SKILLS = [
 
 export const skillById = (id) => SKILLS.find((k) => k.id === id);
 
-/** Games shown on the home page. */
+/** Games shown on the home page.
+ *  levels (optional) = the skill trained at each game level, index 0 = level 1. Derived from each game's main.js;
+ *  used by path.js to link a skill to the game level that trains it. Games without it are linked without a level. */
 export const GAMES = [
-  { id: 'high-low', domain: 'listen', icon: '↕', en: 'High or low', fr: 'Aigu ou grave' },
-  { id: 'echo-penta', domain: 'listen', icon: '◍', en: 'Echo', fr: 'Écho' },
-  { id: 'ear-intervals', domain: 'listen', icon: '⇅', en: 'Intervals by ear', fr: 'Intervalles à l’oreille' },
-  { id: 'ear-chords', domain: 'listen', icon: '≡', en: 'Chords by ear', fr: 'Accords à l’oreille' },
-  { id: 'ear-cadences', domain: 'listen', icon: '◗', en: 'Cadences by ear', fr: 'Cadences à l’oreille' },
+  { id: 'high-low', domain: 'listen', icon: '↕', en: 'High or low', fr: 'Aigu ou grave', levels: ['listen.highlow','listen.highlow','listen.highlow','listen.highlow','listen.contour','listen.contour'] },
+  { id: 'echo-penta', domain: 'listen', icon: '◍', en: 'Echo', fr: 'Écho', levels: ['listen.penta.echo','listen.penta.echo','listen.penta.echo','listen.penta.long','listen.penta.long','listen.penta.long'] },
+  { id: 'ear-intervals', domain: 'listen', icon: '⇅', en: 'Intervals by ear', fr: 'Intervalles à l’oreille', levels: ['listen.intervals.basic','listen.intervals.basic','listen.intervals.all','listen.intervals.all','listen.intervals.harmonic'] },
+  { id: 'ear-chords', domain: 'listen', icon: '≡', en: 'Chords by ear', fr: 'Accords à l’oreille', levels: ['listen.chords.triads','listen.chords.triads','listen.chords.triads4','listen.chords.sevenths','listen.chords.sevenths'] },
+  { id: 'ear-cadences', domain: 'listen', icon: '◗', en: 'Cadences by ear', fr: 'Cadences à l’oreille', levels: ['listen.cadence.feel','listen.cadence.basic','listen.cadence.basic','listen.cadence.all','listen.cadence.all','listen.cadence.advanced'] },
   { id: 'ear-scales', domain: 'listen', icon: '⋰', en: 'Scales by ear', fr: 'Gammes à l’oreille' },
   { id: 'ear-progressions', domain: 'listen', icon: '⇢', en: 'Chord paths', fr: 'Suites d’accords' },
   { id: 'melody-dictation', domain: 'listen', icon: '✎', en: 'Write the tune', fr: 'Écris la mélodie' },
@@ -133,26 +135,26 @@ export const GAMES = [
   { id: 'music-words', domain: 'listen', icon: '𝆑', en: 'Music words', fr: 'Les mots de la musique' },
   { id: 'form', domain: 'listen', icon: '▭', en: 'Phrases and form', fr: 'Phrases et forme' },
   { id: 'two-voices', domain: 'listen', icon: '⫶', en: 'Two voices', fr: 'Deux voix' },
-  { id: 'sing-match', domain: 'sing', icon: '◉', en: 'Sing it', fr: 'Chante-la' },
-  { id: 'second-voice', domain: 'sing', icon: '◎', en: 'Second voice', fr: 'Deuxième voix' },
+  { id: 'sing-match', domain: 'sing', icon: '◉', en: 'Sing it', fr: 'Chante-la', levels: ['sing.match','sing.match','sing.penta','sing.intervals','sing.scale'] },
+  { id: 'second-voice', domain: 'sing', icon: '◎', en: 'Second voice', fr: 'Deuxième voix', levels: ['sing.voice.hold','sing.voice.hold','sing.voice.tension','sing.voice.tension','sing.voice.thirds','sing.voice.leading','sing.voice.cadence','sing.voice.guide','sing.voice.patterns','sing.voice.free'] },
   { id: 'sight-sing', domain: 'sing', icon: '♫', en: 'Sing the score', fr: 'Chante la partition' },
-  { id: 'penta-jam', domain: 'play', icon: '✦', en: 'Five-note jam', fr: 'Impro cinq notes' },
+  { id: 'penta-jam', domain: 'play', icon: '✦', en: 'Five-note jam', fr: 'Impro cinq notes', levels: ['play.penta.free','play.penta.callresponse','play.penta.harmony','play.penta.harmony','play.penta.blues','play.penta.modal','play.penta.jazz','play.penta.outside'] },
   { id: 'play-the-note', domain: 'play', icon: '♪', en: 'Play the note', fr: 'Joue la note' },
   { id: 'known-tunes', domain: 'play', icon: '♬', en: 'Tunes you know', fr: 'Airs connus' },
   { id: 'compose', domain: 'play', icon: '✚', en: 'Make a tune', fr: 'Invente un air' },
   { id: 'play-scales', domain: 'play', icon: '⟋', en: 'Play the scale', fr: 'Joue la gamme' },
-  { id: 'play-chords', domain: 'play', icon: '☰', en: 'Play the chord', fr: 'Joue l’accord' },
-  { id: 'tap-rhythm', domain: 'rhythm', icon: '●', en: 'Tap the rhythm', fr: 'Frappe le rythme' },
+  { id: 'play-chords', domain: 'play', icon: '☰', en: 'Play the chord', fr: 'Joue l’accord', levels: ['play.chords','play.chords','play.chords','play.chords','play.chords','play.cadence','play.cadence'] },
+  { id: 'tap-rhythm', domain: 'rhythm', icon: '●', en: 'Tap the rhythm', fr: 'Frappe le rythme', levels: ['rhythm.pulse','rhythm.echo.basic','rhythm.read.basic','rhythm.rests','rhythm.sixteenths','rhythm.syncopation','rhythm.triplets','rhythm.compound','rhythm.odd'] },
   { id: 'rhythm-dictation', domain: 'rhythm', icon: '✐', en: 'Write the rhythm', fr: 'Écris le rythme' },
   { id: 'two-hands', domain: 'rhythm', icon: '◐', en: 'Two hands', fr: 'Deux mains' },
-  { id: 'find-a-note', domain: 'read', icon: '𝄞', en: 'Find the note', fr: 'Trouve la note' },
+  { id: 'find-a-note', domain: 'read', icon: '𝄞', en: 'Find the note', fr: 'Trouve la note', levels: ['read.treble.staff','read.treble.ledger','read.bass.staff','read.bass.ledger','read.accidentals','read.grand'] },
   { id: 'read-melody', domain: 'read', icon: '♩', en: 'Read and play', fr: 'Lis et joue' },
   { id: 'key-signatures', domain: 'read', icon: '♯', en: 'Key signatures', fr: 'Armures' },
   { id: 'read-intervals', domain: 'read', icon: '⇳', en: 'Read the interval', fr: 'Lis l’intervalle' },
   { id: 'read-chords', domain: 'read', icon: '⁝', en: 'Read the chord', fr: 'Lis l’accord' },
   { id: 'score-reading', domain: 'read', icon: '⇄', en: 'Transpose', fr: 'Transpose' },
-  { id: 'build-scales', domain: 'theory', icon: '▤', en: 'Build the scale', fr: 'Construis la gamme' },
-  { id: 'build-chords', domain: 'theory', icon: '▦', en: 'Build the chord', fr: 'Construis l’accord' },
+  { id: 'build-scales', domain: 'theory', icon: '▤', en: 'Build the scale', fr: 'Construis la gamme', levels: ['theory.scales','theory.scales','theory.scales','theory.scales','theory.modes','theory.modes'] },
+  { id: 'build-chords', domain: 'theory', icon: '▦', en: 'Build the chord', fr: 'Construis l’accord', levels: ['theory.intervals','theory.intervals','theory.intervals','theory.chords','theory.chords','theory.chords'] },
   { id: 'circle-of-fifths', domain: 'theory', icon: '◔', en: 'Circle of fifths', fr: 'Cycle des quintes' },
-  { id: 'harmony-lab', domain: 'theory', icon: '❖', en: 'Harmony lab', fr: 'Atelier d’harmonie' },
+  { id: 'harmony-lab', domain: 'theory', icon: '❖', en: 'Harmony lab', fr: 'Atelier d’harmonie', levels: ['theory.harmony','theory.harmony','theory.harmony','theory.harmony','theory.harmony','theory.jazz','theory.jazz','theory.jazz'] },
 ];

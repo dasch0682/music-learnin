@@ -4,7 +4,7 @@ import { chromium } from 'playwright-core';
 const ID = 'play-scales';
 const base = `http://localhost:${process.env.PORT || 5303}/${ID}/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR', hasTouch: true });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -114,6 +114,45 @@ check(await page.isVisible('.ps-offer:not(.ps-off)'), 'next level button not sho
 await page.click('.ps-offer');
 await page.waitForFunction(() => window.__test.state().level === 2 && !window.__test.state().locked);
 check((await state()).level === 2, 'next level button did not change the level');
+
+// Microphone input: injected pitches (any octave, transposing instrument), a wrong note, and a still-ringing note not counting twice.
+const feedFor = async (midi, ms) => { for (let t = 0; t < ms; t += 40) { await page.evaluate((m) => window.__test.feed(m), midi); await page.waitForTimeout(40); } };
+async function micSetup(level, instrument) {
+  await page.evaluate(([id, l, ins]) => { localStorage.setItem('ml:settings:' + id, JSON.stringify({ level: l, model: false, input: 'mic', instrument: ins })); localStorage.setItem('ml:lang', 'fr'); localStorage.setItem('ml:theme', 'light'); }, [ID, level, instrument]);
+  await page.reload();
+  await page.click('.ml-start');
+  await page.waitForFunction(() => window.__test.state().expected.length && !window.__test.state().locked, null, { timeout: 15000 });
+}
+for (const [instrument, shift] of [['C', 0], ['Bb', -2], ['Eb', -9]]) {
+  await micSetup(2, instrument);
+  let s = await state();
+  check(s.micMode || s.micFailed, 'mic: neither mic mode nor fallback');
+  if (!s.micMode) { console.log('mic unavailable in this browser, using keyboard fallback check only'); break; }
+  check(s.shift === shift, `mic ${instrument}: shift ${s.shift}`);
+  check(await page.$('.ps-meter') !== null, 'mic: no meter');
+  const before = (await attempts()).length;
+  // Short note (under 0.4 s) does not count.
+  await feedFor(s.expected[0] + shift, 120);
+  check((await state()).idx === 0, 'mic: a short note counted');
+  await feedFor(null, 300);
+  // Wrong note held 1.3 s: counted once.
+  await feedFor(s.expected[0] + shift + 3, 1300);
+  s = await state();
+  check(s.wrongLogged && s.idx === 0, 'mic: wrong note not counted once');
+  await feedFor(null, 300);
+  for (let i = 0; i < s.expected.length; i++) {
+    const octave = (i % 3 - 1) * 12; // any octave
+    await feedFor(s.expected[i] + shift + octave, 650);
+    const idx = (await state()).idx;
+    if (i < s.expected.length - 1) check(idx === i + 1, `mic ${instrument}: note ${i} gave idx ${idx}`);
+  }
+  await page.waitForTimeout(200);
+  const mine = (await attempts()).slice(before);
+  check(mine.map((a) => a.ok).join() === 'false,true' && mine.every((a) => a.skill === 'play.scales' && a.level === 2), `mic ${instrument}: ${JSON.stringify(mine.map((a) => [a.ok, a.level]))}`);
+  check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), 'mic: overflow');
+  if (dir && instrument === 'Bb') await page.screenshot({ path: `${dir}/ps-mic.png` });
+  await page.waitForFunction(() => !window.__test.state().locked && window.__test.state().idx === 0, null, { timeout: 5000 });
+}
 check(!errors.length, 'console: ' + errors.join(' | '));
 await browser.close();
 console.log(failed ? `${failed} failure(s)` : 'all good');

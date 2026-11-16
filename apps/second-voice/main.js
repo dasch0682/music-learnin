@@ -9,7 +9,7 @@ import { loadItemMastery, pickWeak } from '@core/mastery.js';
 import './style.css';
 
 const L = (en, fr) => ({ en, fr });
-const MAX_LEVEL = 10;
+const MAX_LEVEL = 11;
 const game = createGame({
   id: 'second-voice',
   title: L('Second voice', 'Deuxième voix'),
@@ -29,6 +29,8 @@ const game = createGame({
     cycle: L('Cycle of fifths', 'Cycle des quintes'),
     tritone: L('Tritone substitution', 'Substitution tritonique'),
     cliche: L('Line cliché', 'Ligne cliché'),
+    c76: L('7–6 chain', 'Chaîne 7–6'),
+    c43: L('4–3 chain', 'Chaîne 4–3'),
   },
   settings: [
     { key: 'level', label: L('Level', 'Niveau'), type: 'select', default: 1, options: [
@@ -41,7 +43,8 @@ const game = createGame({
       { value: 7, label: L('7 · Sing through the cadences', '7 · Traverse les cadences') },
       { value: 8, label: L('8 · Guide tones on ii–V–I', '8 · Notes guides sur ii–V–I') },
       { value: 9, label: L('9 · Advanced patterns', '9 · Motifs avancés') },
-      { value: 10, label: L('10 · Improvise a second voice', '10 · Improvise une deuxième voix') },
+      { value: 10, label: L('10 · Chains of suspensions', '10 · Retards en chaîne') },
+      { value: 11, label: L('11 · Improvise a second voice', '11 · Improvise une deuxième voix') },
     ] },
     { key: 'voice', label: L('Voice', 'Voix'), type: 'select', default: 'child', options: [
       { value: 'child', label: L('Child', 'Enfant') },
@@ -60,7 +63,7 @@ const game = createGame({
 const { h } = game;
 
 const VOICES = { child: [60, 69], high: [57, 74], medium: [48, 62], low: [43, 57] };
-const SKILL = { 1: 'sing.voice.hold', 2: 'sing.voice.hold', 3: 'sing.voice.tension', 4: 'sing.voice.tension', 5: 'sing.voice.thirds', 6: 'sing.voice.leading', 7: 'sing.voice.cadence', 8: 'sing.voice.guide', 9: 'sing.voice.patterns', 10: 'sing.voice.free' };
+const SKILL = { 1: 'sing.voice.hold', 2: 'sing.voice.hold', 3: 'sing.voice.tension', 4: 'sing.voice.tension', 5: 'sing.voice.thirds', 6: 'sing.voice.leading', 7: 'sing.voice.cadence', 8: 'sing.voice.guide', 9: 'sing.voice.patterns', 10: 'sing.voice.chain', 11: 'sing.voice.free' };
 const MAJOR = [0, 2, 4, 5, 7, 9, 11];
 const PENTA = [0, 2, 4, 7, 9, 12];
 const CONSONANT = [0, 3, 4, 7, 8, 9]; // against the bass, as pitch classes
@@ -106,6 +109,11 @@ const LINES = {
     cliche: { name: 'cliche', chords: ['im', 'imM7', 'im7', 'im6'], line: [0, -1, -2, -3], tense: [1, 2] },
   },
 };
+// Suspension chains. The bass steps down while the singer holds (tension), then the singer steps down (release).
+// rest / tens = scale steps above the bass: 6th then 7th, or 3rd then 4th.
+const CHAINS = { '7-6': { rest: 5, tens: 6, name: 'c76' }, '4-3': { rest: 2, tens: 3, name: 'c43' } };
+const CHAIN_STAGES = [['7-6:2', '4-3:2'], ['7-6:3', '4-3:3']];
+const deg = (n) => MAJOR[mod(n, 7)] + 12 * Math.floor(n / 7);
 const PROGS = { 'I-vi-IV-V': ['Imaj7', 'vi7', 'IVmaj7', 'V7'], 'ii-V-I': ['ii7', 'V7', 'Imaj7'] };
 
 const HOLD_MS = 700; // in-tune singing needed on each step
@@ -172,7 +180,7 @@ function render() {
   const parts = [];
   if (r.name) parts.push(game.t(r.name));
   if (r.level >= 6 && st.chord) parts.push(noteName(r.tonic + st.chord.root, { lang: game.lang, pref: st.chord.flat ? 'flat' : r.pref }) + st.chord.sym);
-  if (r.level >= 3 && r.level <= 9) parts.push(game.t(st.kind));
+  if (r.level >= 3 && r.level <= 10) parts.push(game.t(st.kind));
   hint.textContent = parts.join(' · ');
   band.classList.toggle('sv-tension', st.kind === 'tension');
   band.classList.toggle('sv-hidden', !st.show || r.done);
@@ -289,6 +297,18 @@ async function build(level) {
     const def = LINES[level][item];
     name = def.name || null;
     steps = def.chords.map((c, i) => step(chordOther(CH[c], def.line[i]), def.line[i], { kind: def.tense.includes(i) ? 'tension' : 'rest', chord: CH[c] }));
+  } else if (level === 10) {
+    item = pickWeak(staged(CHAIN_STAGES, stats), stats, { avoid: last });
+    const [kind, links] = item.split(':');
+    const ch = CHAINS[kind];
+    name = ch.name;
+    const d = pick([3, 4, 5, 6]);
+    // Preparation (at rest), then for each link: the bass steps down (tension), the singer steps down (release).
+    steps = [step([deg(d) - 12], deg(d + ch.rest))];
+    for (let k = 1; k <= +links; k++) {
+      steps.push(step([deg(d - k) - 12], deg(d + ch.rest - k + 1), { kind: 'tension' }));
+      steps.push(step([deg(d - k) - 12], deg(d + ch.rest - k)));
+    }
   } else {
     item = pickWeak(Object.keys(PROGS), stats, { avoid: last });
     // The app plays root and fifth. The colour notes (third, seventh) are left to the singer.
