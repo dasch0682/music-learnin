@@ -120,7 +120,7 @@ check((await state()).entered.length === 0, 'undo removes the cell');
 for (let i = 0; i < 6; i++) {
   const s = await state();
   await enter(s.cells);
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(2700);
 }
 check(await page.$eval('.rd-next', (e) => e.classList.contains('rd-show')), 'next-level button after a clean streak');
 await page.click('.rd-next');

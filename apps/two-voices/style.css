@@ -1,0 +1,19 @@
+/* Two voices. Colours: core variables only. */
+.tv-staff { width: 100%; max-width: 440px; border: 2px solid var(--line); border-radius: var(--radius); padding: 2px 4px 4px; cursor: pointer; box-sizing: border-box; background: var(--surface); }
+.tv-staff.tv-active { border-color: var(--accent); }
+.tv-svg { width: 100%; display: flex; justify-content: center; }
+.tv-svg .ml-staff { width: 100%; }
+.tv-dots { display: flex; gap: 8px; justify-content: center; min-height: 12px; }
+.tv-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--muted); box-sizing: border-box; }
+.tv-dot.tv-on { background: var(--fg); border-color: var(--fg); }
+.tv-dot.tv-ok { background: var(--good); border-color: var(--good); }
+.tv-dot.tv-bad { background: var(--bad); border-color: var(--bad); }
+.tv-kb { width: 100%; max-width: 440px; }
+.tv-row { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.tv-undo {
+  width: 52px; height: 52px; flex: none; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  display: grid; place-items: center; padding: 0;
+}
+.tv-undo:disabled { opacity: .35; }
+.tv-next { visibility: hidden; }
+.tv-next.tv-show { visibility: visible; }
