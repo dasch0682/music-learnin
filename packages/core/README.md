@@ -66,7 +66,8 @@ A game may add its own `style.css` (import it from `main.js`), using only these 
 
 ## staff.js
 
-`renderStaff(container, { clef: 'treble'|'bass'|'alto'|'tenor', notes: [{ midi | [midis], pref, color, stem }], width, gap })` → svg.
+`renderStaff(container, { clef: 'treble'|'bass'|'alto'|'tenor', keySig: -7..7, notes: [{ midi | [midis], pref, color, stem, acc: false | 'natural', spell: [{ step, acc }] }], width, gap })` → svg.
+`keySig`: flats if negative, sharps if positive. `acc: false` hides the accidental (covered by the key signature). `spell` gives the exact spelling of each head (step: C4 = 28, one per diatonic step; acc -2..2) when sharp/flat `pref` is not enough (E♯, C♭, double accidentals).
 
 ## keyboard.js
 
@@ -92,3 +93,14 @@ Both return `{ el, flash(midi, 'ml-hit'|'ml-good'|'ml-bad'|'ml-hint', ms), setEn
 
 `npx vite --port <port> --strictPort` then `PORT=<port> node tools/shot.mjs /<slug>/ out.png dark|light "<js run in page>"`.
 The script prints console errors. `LOCALE=en-US` switches the language.
+
+## Conventions shared by the games
+
+- A wrong answer is logged once per question, then the player retries the same question. A success is logged too.
+- After a run of clean successes (6 to 10), show a one-tap "next level" button that calls `game.set('level', n + 1)`.
+- Expose `window.__test = { state() , ... }` so a script can play the game. Put that script in `tools/<slug>.test.mjs`
+  (see `tools/second-voice.test.mjs` and `tools/ear-cadences.test.mjs`): it plays every level, checks the attempts in IndexedDB,
+  checks there is no console error and no horizontal overflow at 390 px, and exits non-zero on failure.
+- Microphone games: the app never listens while it plays a sound of its own (see `apps/second-voice/main.js`).
+- Two threads run through all levels, first by ear and by hand, later with their names:
+  the five-note (pentatonic) scale, and tension and release (second voice, cadences).
