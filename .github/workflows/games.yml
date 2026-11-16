@@ -1,0 +1,27 @@
+name: Game tests
+
+# Plays every level of every game. Slow (about 40 minutes): runs once a week and on demand.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  games:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Play every game
+        run: |
+          npx vite --port 5220 --strictPort &
+          sleep 5
+          PORT=5220 node tools/test-all.mjs
