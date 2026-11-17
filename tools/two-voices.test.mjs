@@ -21,14 +21,15 @@ const NAT = [0, 2, 4, 5, 7, 9, 11];
 const isMinor = (k) => k.endsWith('m');
 const scale = (k) => (isMinor(k) ? HARM : MAJ).map((i) => pc(TONIC[k] + i));
 const ROUNDS = { 1: 6, 2: 6, 3: 6, 4: 6, 5: 6, 6: 8 };
-const TEXTURE = { 1: 'drone', 2: 'tonic-fifth', 3: 'parallel', 4: 'contrary', 5: 'cadence', 6: 'suspension' };
+const TEXTURES = { 1: ['drone', 'drone-top'], 2: ['tonic-fifth', 'oblique-fifth'], 3: ['thirds', 'sixths'], 4: ['contrary', 'oblique'], 5: ['cadence', 'two-to-one'], 6: ['suspension', 'minor-cadence'] };
 const CONS = [0, 3, 4, 7, 8, 9];
 
 function rules(level, s) {
   const { key, top: T, bottom: B, n } = s;
   const where = `L${level} ${key} T[${T}] B[${B}]`;
   const rel = (m) => pc(m - TONIC[key]);
-  check(s.item === TEXTURE[level], `${where}: item ${s.item}`);
+  const tx = s.texture;
+  check(TEXTURES[level].includes(tx) && s.item === tx, `${where}: texture ${tx} item ${s.item}`);
   check(T.length === n && B.length === n && n >= 3 && n <= 5, `${where}: lengths`);
   check(s.sig === SIG[key], `${where}: key signature`);
   check(T.every((m) => m >= 60 && m <= 79) && B.every((m) => m >= 43 && m <= 62), `${where}: ranges`);
@@ -43,32 +44,53 @@ function rules(level, s) {
   }
   const vert = (i) => pc(T[i] - B[i]);
   const diat = (m) => { const k = scale(key).indexOf(pc(m)); return 7 * Math.floor((m - TONIC[key] - (isMinor(key) ? 0 : 0) + 12 * 5) / 12) + k; };
-  if (level === 1) {
+  const stepDeg = (a, lo, hi) => a.every((m, i) => !i || (Math.abs(diat(m) - diat(a[i - 1])) >= lo && Math.abs(diat(m) - diat(a[i - 1])) <= hi));
+  const inChord = (m, c) => c.includes(rel(m));
+  if (tx === 'drone') {
     check(key === 'C' && n === 3 && B.every((m) => m === B[0] && pc(m) === 0), `${where}: drone`);
     check([0, 7].includes(rel(T[2])) && T.slice(1).every((m, i) => Math.abs(m - T[i]) >= 1 && Math.abs(m - T[i]) <= 4), `${where}: melody`);
-    check(T.every((m, i) => CONS.includes(vert(i)) || true), where);
   }
-  if (level === 2) {
+  if (tx === 'drone-top') {
+    check(key === 'C' && n === 3 && T.every((m) => m === T[0]) && [0, 4, 7].includes(rel(T[0])), `${where}: held top`);
+    check(new Set(B).size >= 2 && stepDeg(B, 1, 2) && rel(B[2]) === 0, `${where}: bass walk`);
+  }
+  if (tx === 'tonic-fifth') {
     check(n === 3 || n === 5, `${where}: n`);
     B.forEach((m, i) => check(rel(m) === (i % 2 ? 7 : 0), `${where}: bass ${i}`));
     T.forEach((m, i) => check((i % 2 ? [7, 11, 2] : [0, 4, 7]).includes(rel(m)), `${where}: melody ${i} not a chord tone`));
     check(rel(T[n - 1]) === 0, `${where}: end`);
     check(T.slice(1).every((m, i) => Math.abs(m - T[i]) >= 1 && Math.abs(m - T[i]) <= 4), `${where}: leaps`);
   }
-  if (level === 3) {
+  if (tx === 'oblique-fifth') {
+    check(n === 3 || n === 5, `${where}: n`);
+    B.forEach((m, i) => check(rel(m) === (i % 2 ? 7 : 0), `${where}: bass ${i}`));
+    check(T.slice(0, n - 1).every((m) => m === T[0]) && rel(T[0]) === 7, `${where}: held common tone`);
+    check(rel(T[n - 1]) === 4 && diat(T[n - 1]) === diat(T[0]) - 2, `${where}: top ends a third lower`);
+  }
+  if (tx === 'thirds' || tx === 'sixths') {
     check(n === 4 || n === 5, `${where}: n`);
     const gaps = T.map((m, i) => diat(m) - diat(B[i]));
-    check(gaps.every((g) => g === gaps[0]) && (gaps[0] === 2 || gaps[0] === 5), `${where}: not parallel thirds/sixths ${gaps}`);
-    check((gaps[0] === 2 ? 'thirds' : 'sixths') === s.tag, `${where}: tag ${s.tag}`);
-    check(T.slice(1).every((m, i) => Math.abs(diat(m) - diat(T[i])) === 1), `${where}: not by step`);
+    check(gaps.every((g) => g === gaps[0]) && gaps[0] === (tx === 'thirds' ? 2 : 5), `${where}: not parallel ${tx} ${gaps}`);
+    check(T.every((m, i) => (tx === 'thirds' ? [3, 4] : [8, 9]).includes(m - B[i])), `${where}: interval size`);
+    check(s.tag === tx, `${where}: tag ${s.tag}`);
+    check(stepDeg(T, 1, 1), `${where}: not by step`);
   }
-  if (level === 4) {
+  if (tx === 'contrary') {
     check(n === 4 || n === 5, `${where}: n`);
     for (let i = 1; i < n; i++) check(Math.sign(T[i] - T[i - 1]) * Math.sign(B[i] - B[i - 1]) === -1, `${where}: not contrary at ${i}`);
     check(T.every((m, i) => CONS.includes(vert(i))), `${where}: dissonant interval`);
     check(rel(B[n - 1]) === 0, `${where}: bass must end on tonic`);
   }
-  if (level === 5) {
+  if (tx === 'oblique') {
+    check(n === 4 || n === 5, `${where}: n`);
+    let tm = 0, bm = 0;
+    for (let i = 1; i < n; i++) { const a = T[i] !== T[i - 1], b = B[i] !== B[i - 1]; check(a !== b, `${where}: not oblique at ${i}`); tm += a; bm += b; }
+    check(tm > 0 && bm > 0, `${where}: both voices must move`);
+    check(stepDeg(T, 0, 2) && stepDeg(B, 0, 2), `${where}: steps`);
+    check(T.every((m, i) => CONS.includes(vert(i))), `${where}: dissonant interval`);
+    check(rel(B[n - 1]) === 0 && [0, 4, 3].includes(rel(T[n - 1])), `${where}: ending`);
+  }
+  if (tx === 'cadence') {
     check(n === 4 && B.map(rel).join() === '0,5,7,0', `${where}: bass I IV V I ${B.map(rel)}`);
     const chords = [[0, 4, 7], [5, 9, 0], [7, 11, 2], [0, 4, 7]];
     T.forEach((m, i) => check(chords[i].includes(rel(m)), `${where}: melody ${i} not in chord ${i}`));
@@ -76,7 +98,14 @@ function rules(level, s) {
     if (rel(T[2]) === 11) check(T[3] === T[2] + 1, `${where}: leading tone does not rise`);
     check(T.slice(1).every((m, i) => Math.abs(m - T[i]) <= 4), `${where}: leaps`);
   }
-  if (level === 6) {
+  if (tx === 'two-to-one') {
+    check(n === 5 && B.map(rel).join() === '0,0,7,7,0', `${where}: bass ${B.map(rel)}`);
+    check(inChord(T[0], [0, 4, 7]) && inChord(T[2], [7, 11, 2]) && rel(T[4]) === 0, `${where}: strong beats are chord tones`);
+    check(stepDeg(T, 1, 2) && new Set(T).size >= 4, `${where}: melody`);
+    [0, 2, 4].forEach((i) => check(CONS.includes(vert(i)), `${where}: strong beat dissonant ${i}`));
+    T.forEach((m, i) => { if (rel(m) === 11) check(i === 3 && T[4] === m + 1, `${where}: leading tone ${i}`); });
+  }
+  if (tx === 'suspension') {
     check(isMinor(key) && n === 5, `${where}: minor, 5 notes`);
     check(T[1] === T[2] && B[2] === B[3] && B[1] !== B[2], `${where}: suspension shape`);
     check([1, 2].includes(T[2] - T[3]), `${where}: no resolution down by step`);
@@ -86,6 +115,14 @@ function rules(level, s) {
     check(s.tag === (vert(2) === 5 ? 'four-three' : 'seven-six'), `${where}: tag ${s.tag}`);
     check(rel(B[4]) === 0 && rel(T[4]) === 0, `${where}: final tonic`);
     if (s.tag === 'four-three') check(rel(T[3]) === 11, `${where}: raised leading tone`);
+  }
+  if (tx === 'minor-cadence') {
+    check(isMinor(key) && n === 4 && B.map(rel).join() === '0,5,7,0', `${where}: bass i iv V i ${B.map(rel)}`);
+    const chords = [[0, 3, 7], [5, 8, 0], [7, 11, 2], [0, 3, 7]];
+    T.forEach((m, i) => check(chords[i].includes(rel(m)), `${where}: melody ${i} not in chord ${i}`));
+    check(rel(T[3]) === 0, `${where}: end on tonic`);
+    if (rel(T[2]) === 11) check(T[3] === T[2] + 1, `${where}: leading tone does not rise`);
+    check(T.slice(1).every((m, i) => Math.abs(m - T[i]) <= 4 && Math.abs(m - T[i]) !== 3 || Math.abs(m - T[i]) === 3 && ![8, 11].includes(rel(m)) ), `${where}: leaps or augmented second`);
   }
 }
 
@@ -145,10 +182,28 @@ for (let level = 1; level <= 6; level++) {
     if (dir && round === 2 && level === 6) await page.screenshot({ path: `${dir}/tv-6-fr.png` });
     await page.waitForTimeout(1800);
     const mine = (await attempts()).slice(before);
-    check(mine.length === 1 && mine[0].ok === (round > 1) && mine[0].level === level && mine[0].item === TEXTURE[level] && mine[0].skill === 'listen.twovoices', `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.level, a.skill]))}`);
+    check(mine.length === 1 && mine[0].ok === (round > 1) && mine[0].level === level && mine[0].item === s.item && mine[0].skill === 'listen.twovoices', `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.level, a.skill]))}`);
   }
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
-  console.log(`L${level}`, [...seen].join(' '), [...lens].join(','), [...tags].join(','));
+  // Many generated questions: rules on all of them, at least two textures, every key of the level, G major thirds.
+  const smp = await page.evaluate(([l, k]) => window.__test.sample(l, k), [level, level === 3 ? 600 : 300]);
+  const byTex = {}, byKey = {};
+  for (const x of smp) { rules(level, x); byTex[x.texture] = (byTex[x.texture] || 0) + 1; byKey[x.key + '/' + x.texture] = 1; }
+  check(Object.keys(byTex).length >= 2 && TEXTURES[level].every((t) => byTex[t]), `L${level}: textures seen ${JSON.stringify(byTex)}`);
+  check(new Set(smp.map((x) => x.key)).size === { 1: 1, 2: 2 }[level] || level > 2, `L${level}: keys`);
+  for (const t of TEXTURES[level]) { // each texture must be possible in each key of the level
+    const keys = await page.evaluate(([l, t2]) => [...new Set(window.__test.sample(l, 60, t2).map((x) => x.key))], [level, t]);
+    const want = { 1: ['C'], 2: ['C', 'G'], 3: ['C', 'G', 'F'], 4: ['C', 'G', 'F'], 5: ['C', 'G', 'F'], 6: ['Am', 'Em', 'Dm'] }[level];
+    check(want.every((k) => keys.includes(k)), `L${level} ${t}: keys ${keys}`);
+  }
+  if (level === 3) {
+    const g3 = smp.filter((x) => x.key === 'G' && x.texture === 'thirds');
+    check(g3.length > 0, 'G major: no parallel thirds');
+    check(g3.some((x) => [...x.top, ...x.bottom].some((m) => m % 12 === 6)), 'G major thirds: no F sharp seen');
+    check(g3.every((x) => [...x.spellTop, ...x.spellBottom].every(([l, a]) => (l === 3 ? a === 1 : a === 0))), 'G major thirds: wrong spelling (F must be F sharp)');
+    console.log('L3 G thirds', g3.length, 'of', smp.length);
+  }
+  console.log(`L${level}`, [...seen].join(' '), [...lens].join(','), [...tags].join(','), JSON.stringify(byTex));
 }
 function n(s) { return s.n - 1; }
 // Undo, then next-level button after a clean streak.

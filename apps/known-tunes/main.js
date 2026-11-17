@@ -36,7 +36,7 @@ const levelNow = () => (+game.settings.level >= 1 && +game.settings.level <= 6 ?
 let kb = null, tune = null, shift = 0, win = [60, 72];
 let phraseIdx = 0, expected = [], beats = [], pos = 0, failed = false, startedAt = 0;
 let state = 'idle', streak = 0, last = null, nameShown = false;
-let gen = 0, running = false;
+let gen = 0, running = false, forced = null;
 
 const replay = game.h('button', { className: 'ml-round tn-replay', textContent: '▶' });
 const dots = game.h('div', { className: 'tn-dots' });
@@ -50,7 +50,7 @@ function expose() {
     level: levelNow(), tune: tune?.id, phrase: phraseIdx, phrases: tune?.phrases.length, shift, expected: [...expected], pos, win: [...win],
     state, failed, streak, nameShown, name: nameEl.textContent,
     startMarked: [...kbBox.querySelectorAll('.tn-start')].map((k) => +k.dataset.midi),
-  }) };
+  }), force: (id) => { forced = id || null; restart(); } };
 }
 function setState(s) { state = s; replay.disabled = s !== 'answer'; expose(); }
 function renderDots() {
@@ -127,8 +127,9 @@ async function playPhrase(g) {
 
 async function newTune() {
   const g = gen, lv = levelNow();
-  let pool = TUNES;
-  if (lv === 5) pool = TUNES.filter((t) => span(t) >= 9);
+  let pool = TUNES.filter((t) => (t.from || 1) <= lv);
+  if (lv === 5) pool = pool.filter((t) => span(t) >= 9);
+  if (forced) pool = TUNES.filter((t) => t.id === forced);
   let stats = null;
   try { stats = await loadItemMastery(SKILL); } catch { /* storage unavailable */ }
   if (g !== gen) return;

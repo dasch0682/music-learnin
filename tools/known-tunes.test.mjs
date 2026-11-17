@@ -1,6 +1,7 @@
 // Plays every level of Tunes you know with real pointer events: a wrong key, then the right ones.
 // Usage: npx vite --port 5406 --strictPort &   then   PORT=5406 node tools/known-tunes.test.mjs [screenshot-dir]
 import { chromium } from 'playwright-core';
+import { TUNES } from '../apps/known-tunes/tunes.js';
 const ID = 'known-tunes';
 const base = `http://localhost:${process.env.PORT || 5406}/${ID}/`;
 const dir = process.argv[2];
@@ -24,10 +25,35 @@ const DEG = {
   'london-bridge': ['5 6 5 4 3 4 5', '2 3 4', '3 4 5', '5 6 5 4 3 4 5', '2 5 3 1'],
   'susanna': ['1 2 3 5 5 6 5 3', '1 2 3 3 2 1 2'],
   'saints': ['1 3 4 5', '1 3 4 5', '1 3 4 5 3 1 3 2'],
+  'amazing-grace': ['5- 1 3 1 3 2', '1 6- 5- 5-', '1 3 1 3 2 5'],
+  'pont-avignon': ['1 1 1 2 2 2', '3 4 5 1 7- 1 2 5-', '1 1 1 2 2 2', '3 4 5 1 2 7- 1'],
+  'bon-tabac': ['1 2 3 1 2 2 3', '4 4 3 3', '1 2 3 1 2 2 3', '4 5 1'],
+  'alouette': ['1 2 3 3', '2 1 2 3 1 5-', '1 2 3 3', '2 1 2 3 1'],
+  // A minor, tonic A4: natural minor degrees, '#' raises (G sharp leading note).
+  'greensleeves': ['1 3 4 5 6 5 4 2', '7- 1 2 3 1', '1 7#- 1 2 7#- 5-'],
 };
-const MAJOR = [0, 2, 4, 5, 7, 9, 11];
-const midiOf = (tok, shift) => { const d = parseInt(tok, 10); const o = tok.endsWith('-') ? -1 : tok.endsWith("'") ? 1 : 0; return 60 + shift + MAJOR[d - 1] + 12 * o; };
-const phraseMidis = (id, p, shift) => DEG[id][p].split(' ').map((t) => midiOf(t, shift));
+// Total beats (quarter = 1) of each new tune, bar by bar with its upbeat: checks the rhythms add up to whole bars.
+const BEATS = { 'amazing-grace': 1 + 7 * 3, 'pont-avignon': 8 * 2, 'bon-tabac': 8 * 2, 'alouette': 4 * 2, 'greensleeves': 1 + 7 * 3 + 2 };
+const FROM = { greensleeves: 3 };
+const MINOR = { greensleeves: 69 };
+const MAJOR = [0, 2, 4, 5, 7, 9, 11], NAT_MINOR = [0, 2, 3, 5, 7, 8, 10];
+const midiOf = (tok, shift, id) => {
+  const [, d, acc, oct] = tok.match(/^(\d)([#b]?)([-']?)$/);
+  const o = oct === '-' ? -1 : oct === "'" ? 1 : 0, a = acc === '#' ? 1 : acc === 'b' ? -1 : 0;
+  return (MINOR[id] ? MINOR[id] + NAT_MINOR[d - 1] : 60 + MAJOR[d - 1]) + shift + a + 12 * o;
+};
+const phraseMidis = (id, p, shift) => DEG[id][p].split(' ').map((t) => midiOf(t, shift, id));
+
+// Static checks of the data: every tune has its hand-written degrees, beats match notes, new tunes fill whole bars.
+for (const t of TUNES) {
+  check(!!DEG[t.id], `data: no degrees for ${t.id}`);
+  if (!DEG[t.id]) continue;
+  check(t.phrases.length === DEG[t.id].length && t.phrases.every((ph, p) => JSON.stringify(ph.n) === JSON.stringify(phraseMidis(t.id, p, 0)) && ph.b.length === ph.n.length), `data: ${t.id} notes differ from degrees`);
+  if (BEATS[t.id]) check(t.phrases.flatMap((ph) => ph.b).reduce((a, b) => a + b, 0) === BEATS[t.id], `data: ${t.id} beats`);
+  check((t.from || 1) === (FROM[t.id] || 1), `data: ${t.id} from level ${t.from}`);
+  if (t.penta) check(t.phrases.every((ph) => ph.n.every((m) => [0, 2, 4, 7, 9].includes(m % 12))), `data: ${t.id} not pentatonic`);
+}
+check(TUNES.find((t) => t.id === 'amazing-grace')?.penta, 'data: amazing-grace not marked penta');
 const spanOf = (id) => { const a = DEG[id].flatMap((_, p) => phraseMidis(id, p, 0)); return Math.max(...a) - Math.min(...a); };
 const SHIFTS = { 1: [0], 2: [0], 3: [0], 4: [7, -5, 5, -7], 5: [0, 7, -5, 5, -7], 6: [-5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6] };
 
@@ -56,6 +82,7 @@ for (let level = 1; level <= 6; level++) {
     check(!!DEG[id], `L${level}: unknown tune ${id}`);
     check(SHIFTS[level].includes(s.shift), `L${level}: shift ${s.shift}`);
     if (level === 5) check(spanOf(id) >= 9, `L5: ${id} too narrow`);
+    check((FROM[id] || 1) <= level, `L${level}: ${id} appears before level ${FROM[id]}`);
     check(s.phrases === DEG[id].length, `L${level} ${id}: ${s.phrases} phrases`);
     const nPhrases = level <= 2 ? 1 : DEG[id].length;
     for (let p = 0; p < nPhrases; p++) {
@@ -100,6 +127,33 @@ for (let level = 1; level <= 6; level++) {
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   console.log(`L${level}`, [...seen].join(' '));
 }
+
+// Each new tune, forced through the test hook at level 3 (whole tune, no transposition): every phrase, then a wrong key.
+await setup(3, 'en', 'light');
+await waitAnswer();
+for (const id of ['amazing-grace', 'pont-avignon', 'bon-tabac', 'alouette', 'greensleeves']) {
+  await page.evaluate((x) => window.__test.force(x), id);
+  await page.waitForFunction((x) => { const s = window.__test.state(); return s.state === 'answer' && s.tune === x && s.phrase === 0; }, id, { timeout: 20000 });
+  for (let p = 0; p < DEG[id].length; p++) {
+    const s = await state();
+    const full = phraseMidis(id, p, 0);
+    check(s.tune === id && s.phrase === p && s.shift === 0 && JSON.stringify(s.expected) === JSON.stringify(full), `new ${id} p${p}: ${s.expected} want ${full}`);
+    check(s.expected.every((m) => m >= s.win[0] && m <= s.win[1]), `new ${id}: notes out of keyboard`);
+    const before = (await attempts()).length;
+    if (p === 0) {
+      const wrong = [s.expected[0] + 1, s.expected[0] - 1].find((m) => m >= s.win[0] && m <= s.win[1]);
+      await tapKey(wrong);
+      await waitAnswer();
+    }
+    for (const m of s.expected) await tapKey(m);
+    await page.waitForTimeout(250);
+    const mine = (await attempts()).slice(before);
+    check(mine.map((a) => a.ok).join() === (p === 0 ? 'false,true' : 'true') && mine.every((a) => a.item === id && a.level === 3 && a.detail.phrase === p), `new ${id} p${p}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.detail?.phrase]))}`);
+    if (p < DEG[id].length - 1) await waitAnswer({ tune: id, phrase: p });
+  }
+  console.log('new', id, 'ok');
+}
+await page.evaluate(() => window.__test.force(null));
 
 // Clean streak offers the next level with one tap (English, dark).
 await setup(1, 'en', 'dark');

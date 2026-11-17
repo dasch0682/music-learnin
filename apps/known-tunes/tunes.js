@@ -1,5 +1,6 @@
 // Traditional, public-domain melodies as MIDI note lists in C major (C4 = 60), no lyrics.
-// Each phrase: { n: [midi], b: [beats] }. Rhythms are simplified. Degrees are checked in tools/known-tunes.test.mjs.
+// Each phrase: { n: [midi], b: [beats] }, beat = quarter note. Rhythms are simplified. Degrees are checked in tools/known-tunes.test.mjs.
+// Optional `from`: first level where the tune appears (default 1). Minor tunes use the relative minor (A minor).
 const P = (n, b) => ({ n, b });
 const Q = (n) => P(n, n.map(() => 1));
 export const TUNES = [
@@ -30,6 +31,25 @@ export const TUNES = [
   ] },
   { id: 'saints', name: { en: 'When the saints go marching in', fr: 'Quand les saints' }, phrases: [
     P([60, 64, 65, 67], [1, 1, 1, 3]), P([60, 64, 65, 67], [1, 1, 1, 3]), P([60, 64, 65, 67, 64, 60, 64, 62], [1, 1, 1, 2, 1, 1, 1, 3]),
+  ] },
+  { id: 'amazing-grace', penta: true, name: { en: 'Amazing Grace', fr: 'Amazing Grace' }, phrases: [
+    P([55, 60, 64, 60, 64, 62], [1, 2, .5, .5, 2, 1]), P([60, 57, 55, 55], [2, 1, 2, 1]), P([60, 64, 60, 64, 62, 67], [2, .5, .5, 2, 1, 3]),
+  ] },
+  { id: 'pont-avignon', name: { en: 'On the bridge of Avignon', fr: 'Sur le pont d’Avignon' }, phrases: [
+    P([60, 60, 60, 62, 62, 62], [.5, .5, 1, .5, .5, 1]), P([64, 65, 67, 60, 59, 60, 62, 55], [.75, .25, .5, .5, .75, .25, .5, .5]),
+    P([60, 60, 60, 62, 62, 62], [.5, .5, 1, .5, .5, 1]), P([64, 65, 67, 60, 62, 59, 60], [.75, .25, .5, .5, .5, .5, 1]),
+  ] },
+  { id: 'bon-tabac', name: { en: 'I have good tobacco', fr: 'J’ai du bon tabac' }, phrases: [
+    P([60, 62, 64, 60, 62, 62, 64], [.5, .5, .5, .5, 1, .5, .5]), Q([65, 65, 64, 64]),
+    P([60, 62, 64, 60, 62, 62, 64], [.5, .5, .5, .5, 1, .5, .5]), P([65, 67, 60], [1, 1, 2]),
+  ] },
+  { id: 'alouette', name: { en: 'Alouette', fr: 'Alouette' }, phrases: [
+    P([60, 62, 64, 64], [.75, .25, .5, .5]), P([62, 60, 62, 64, 60, 55], [.25, .25, .25, .25, .5, .5]),
+    P([60, 62, 64, 64], [.75, .25, .5, .5]), P([62, 60, 62, 64, 60], [.25, .25, .25, .25, 1]),
+  ] },
+  { id: 'greensleeves', from: 3, name: { en: 'Greensleeves', fr: 'Greensleeves' }, phrases: [
+    P([69, 72, 74, 76, 77, 76, 74, 71], [1, 2, 1, 1.5, .5, 1, 2, 1]), P([67, 69, 71, 72, 69], [1.5, .5, 1, 2, 1]),
+    P([69, 68, 69, 71, 68, 64], [1.5, .5, 1, 2, 1, 2]),
   ] },
 ];
 export const span = (t) => { const a = t.phrases.flatMap((p) => p.n); return Math.max(...a) - Math.min(...a); };

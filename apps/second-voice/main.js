@@ -134,7 +134,14 @@ function staged(stages, stats, key = (k) => k) {
 // The app never sounds the note the singer has to find: the singer completes the chord.
 // (It also keeps the microphone from taking the app's voice for the singer's.)
 const chordOther = (c, sung) => [...new Set([c.root - 12, ...c.tones.map((x) => x - 12)])].filter((x) => mod(x - sung, 12) !== 0);
-function place(notes) { let n = notes; while (Math.min(...n) < 41) n = n.map((x) => x + 12); return n; }
+// Moves notes by octaves. Without `below`: up to at least 41. With `below` (a bass, the lowest sung note of its step):
+// up only while it stays under that note, then down an octave at a time until it is strictly under it.
+function place(notes, below = null) {
+  let n = notes;
+  while (Math.min(...n) < 41 && (below === null || Math.max(...n) + 12 < below)) n = n.map((x) => x + 12);
+  if (below !== null) while (Math.max(...n) >= below) n = n.map((x) => x - 12);
+  return n;
+}
 const near = (a, b) => mod(a - b + 6, 12) - 6; // signed distance, any octave
 
 // ---------- screen ----------
@@ -258,8 +265,8 @@ function setOther(i) {
 }
 
 // ---------- rounds ----------
-async function build(level) {
-  const [lo, hi] = VOICES[game.settings.voice] || VOICES.child;
+async function build(level, voice = game.settings.voice) {
+  const [lo, hi] = VOICES[voice] || VOICES.child;
   const skill = SKILL[level];
   const stats = await loadItemMastery(skill);
   const step = (other, targets, o = {}) => ({ other, targets: [].concat(targets), kind: o.kind || 'rest', show: o.show !== false, chord: o.chord || null });
@@ -326,7 +333,10 @@ async function build(level) {
   const keys = [];
   for (let t = lo - min; t <= hi - max; t++) keys.push(t);
   const tonic = keys.length ? pick(keys) : Math.round((lo + hi) / 2 - (min + max) / 2);
-  for (const s of steps) { s.targets = s.targets.map((x) => tonic + x); s.other = place(s.other.map((x) => tonic + x)); }
+  for (const s of steps) {
+    s.targets = s.targets.map((x) => tonic + x);
+    s.other = place(s.other.map((x) => tonic + x), level <= 2 ? null : Math.min(...s.targets));
+  }
   return {
     level, skill, item, name, steps, demo, tonic, center: tonic + (min + max) / 2,
     pref: [1, 3, 5, 8, 10].includes(mod(tonic, 12)) ? 'flat' : 'sharp',
@@ -483,6 +493,12 @@ game.on('lang', () => { if (view === 'game') render(); else if (view === 'error'
 // Test hook: feed(midi | null) pushes a reading into the same handler as the microphone.
 window.__test = {
   feed(midi) { manual = true; hear(midi == null ? { freq: null, midi: null } : { freq: 440 * 2 ** ((midi - 69) / 12), midi }); },
+  // sample(level, voice, n): n rounds built for that voice setting, as { targets, other } per step.
+  async sample(level, voice, n) {
+    const out = [];
+    for (let i = 0; i < n; i++) out.push((await build(level, voice)).steps.map((s) => ({ targets: s.targets, other: s.other, kind: s.kind })));
+    return out;
+  },
   state: () => ({ view, level: round?.level, item: round?.item, idx: round?.idx, steps: round?.steps.map((s) => ({ targets: s.targets, other: s.other, kind: s.kind, show: s.show })), listening: !!round?.listening && performance.now() >= quietAt, done: round?.done, streak, wrongLogged: round?.wrongLogged }),
 };
 

@@ -16,6 +16,18 @@ const listening = async () => { for (let i = 0; i < 200; i++) { const s = await 
 const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'second-voice').sort((x, y) => x.t - y.t)); }; }));
 
 await page.goto(base);
+// 0. Bass: in every voice setting and level, each bass note sounds strictly below every sung note of its step.
+// Levels 1-2 are not bass levels: the app sings a moving voice above the held note there, by design.
+for (const voice of ['child', 'high', 'medium', 'low']) {
+  for (let level = 3; level <= 11; level++) {
+    const rounds = await page.evaluate(([l, v]) => window.__test.sample(l, v, 150), [level, voice]);
+    let bad = 0, example = null;
+    for (const steps of rounds) for (const st of steps) {
+      if (Math.max(...st.other) >= Math.min(...st.targets)) { bad++; example ??= JSON.stringify(st); }
+    }
+    check(rounds.length === 150 && bad === 0, `bass ${voice} L${level}: ${bad} step(s) with a bass note not below the sung note, e.g. ${example}`);
+  }
+}
 for (let level = 1; level <= 11; level++) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:second-voice', JSON.stringify({ level: l, voice: 'child', tolerance: 50, phones: false })), level);
   await page.reload();

@@ -3,7 +3,7 @@ import { createGame } from '@core/shell.js';
 import { renderStaff } from '@core/staff.js';
 import { createKeyboard } from '@core/keyboard.js';
 import { playNote } from '@core/audio.js';
-import { spell, mod, pick, rand } from '@core/music.js';
+import { spell, mod, pick, rand, shuffle } from '@core/music.js';
 import { loadItemMastery, pickWeak } from '@core/mastery.js';
 import './style.css';
 
@@ -24,12 +24,12 @@ const game = createGame({
   },
   settings: [
     { key: 'level', label: L('Level', 'Niveau'), type: 'select', default: 1, options: [
-      { value: 1, label: L('1 · A held bass note', '1 · Une basse tenue') },
+      { value: 1, label: L('1 · A held note', '1 · Une note tenue') },
       { value: 2, label: L('2 · Bass: tonic and fifth', '2 · Basse : tonique et quinte') },
       { value: 3, label: L('3 · Parallel thirds and sixths', '3 · Tierces et sixtes parallèles') },
-      { value: 4, label: L('4 · Contrary motion', '4 · Mouvement contraire') },
-      { value: 5, label: L('5 · I–IV–V–I bass', '5 · Basse I–IV–V–I') },
-      { value: 6, label: L('6 · Minor, a suspension', '6 · Mineur, un retard') },
+      { value: 4, label: L('4 · Contrary and oblique motion', '4 · Mouvement contraire et oblique') },
+      { value: 5, label: L('5 · Cadences I–IV–V–I', '5 · Cadences I–IV–V–I') },
+      { value: 6, label: L('6 · Minor: suspension, cadence', '6 · Mineur : retard, cadence') },
     ] },
     { key: 'tempo', label: L('Tempo', 'Tempo'), type: 'range', min: 50, max: 100, step: 5, default: 70 },
   ],
@@ -91,30 +91,55 @@ const steps = (a) => a.every((d, i) => !i || (Math.abs(d - a[i - 1]) >= 1 && Mat
 
 // ---------- textures ----------
 const KEYSETS = { 1: ['C'], 2: ['C', 'G'], 3: ['C', 'G', 'F'], 4: ['C', 'G', 'F'], 5: ['C', 'G', 'F'], 6: ['Am', 'Em', 'Dm'] };
-const TEXTURE = { 1: 'drone', 2: 'tonic-fifth', 3: 'parallel', 4: 'contrary', 5: 'cadence', 6: 'suspension' };
+/** Textures offered at each level (one is drawn per question, weak ones come back more often). */
+const TEXTURES = {
+  1: ['drone', 'drone-top'], 2: ['tonic-fifth', 'oblique-fifth'], 3: ['thirds', 'sixths'],
+  4: ['contrary', 'oblique'], 5: ['cadence', 'two-to-one'], 6: ['suspension', 'minor-cadence'],
+};
 const CHORD = { I: [0, 2, 4], IV: [3, 5, 0], V: [4, 6, 1] };
+/** In harmonic minor, degrees 6 and 7 (classes 5 and 6) are an augmented second apart: no stepwise melody between them. */
+const augSecond = (key, a) => key.minor && a.some((d, i) => i && Math.abs(d - a[i - 1]) === 1 && cls(d) + cls(a[i - 1]) === 11);
 
-function attempt(level, key) {
+function cadence(key, bassDegrees) {
+  const chords = ['I', 'IV', 'V', 'I'];
+  const top = chords.map((c) => pick(CHORD[c].flatMap((x) => [x, x + 7])));
+  if (!steps(top) || cls(top[3]) !== 0 || top.some((d) => d < 0 || d > 9) || augSecond(key, top)) return null;
+  if (cls(top[2]) === 6 && top[3] !== top[2] + 1) return null;
+  if (new Set(top).size < 3) return null;
+  return { n: 4, top, bottom: bassDegrees };
+}
+
+function attempt(level, key, tex) {
   const walk = (start, n, ok) => { const a = [start]; for (let i = 1; i < n; i++) a.push(a[i - 1] + pick([-2, -1, 1, 2])); return ok(a) ? a : null; };
-  if (level === 1) {
+  if (tex === 'drone') {
     const n = 3;
     const top = walk(rand(8), n, (a) => steps(a) && a.every((d) => d >= 0 && d <= 8) && [0, 4, 7].includes(a[n - 1]) && new Set(a).size === n);
-    return top && { n, top, bottom: Array(n).fill(-7), tag: 'drone' };
+    return top && { n, top, bottom: Array(n).fill(-7) };
   }
-  if (level === 2) {
+  if (tex === 'drone-top') { // a held note on top, the bass walks by step down to the tonic
+    const n = 3, held = pick([4, 7, 9]);
+    const bottom = walk(-9 + rand(5), n, (a) => steps(a) && a[n - 1] === -7 && a.every((d) => d >= -9 && d <= -3) && new Set(a).size >= 2);
+    return bottom && { n, top: Array(n).fill(held), bottom };
+  }
+  if (tex === 'tonic-fifth') {
     const n = pick([3, 5]);
     const bottom = Array.from({ length: n }, (_, i) => (i % 2 ? -3 : -7));
     const top = [];
     for (let i = 0; i < n; i++) top.push(pick(CHORD[i % 2 ? 'V' : 'I'].flatMap((c) => [c, c + 7])));
     if (!steps(top) || top.some((d) => d < 0 || d > 9) || cls(top[n - 1]) !== 0) return null;
-    return { n, top, bottom, tag: 'tonic-fifth' };
+    return { n, top, bottom };
   }
-  if (level === 3) {
-    const n = pick([4, 5]), gap = pick([2, 5]);
-    const top = walk(rand(10), n, (a) => a.every((d, i) => !i || Math.abs(d - a[i - 1]) === 1) && [0, 2, 4].includes(cls(a[n - 1])));
-    return top && { n, top, bottom: top.map((d) => d - gap), tag: gap === 2 ? 'thirds' : 'sixths' };
+  if (tex === 'oblique-fifth') { // oblique: the top holds the note common to I and V, the bass goes tonic-fifth-tonic, the top then falls a third
+    const n = pick([3, 5]), c = pick([4, 11]);
+    const bottom = Array.from({ length: n }, (_, i) => (i % 2 ? -3 : -7));
+    return { n, top: [...Array(n - 1).fill(c), c - 2], bottom };
   }
-  if (level === 4) {
+  if (tex === 'thirds' || tex === 'sixths') { // the melody may start below the tonic so that thirds fit the low voice in G and F
+    const n = pick([4, 5]), gap = tex === 'thirds' ? 2 : 5;
+    const top = walk(rand(14) - 4, n, (a) => a.every((d, i) => !i || Math.abs(d - a[i - 1]) === 1) && [0, 2, 4].includes(cls(a[n - 1])));
+    return top && { n, top, bottom: top.map((d) => d - gap) };
+  }
+  if (tex === 'contrary') {
     const n = pick([4, 5]);
     const top = [rand(10)], bottom = [-7 - 1 + rand(4)];
     for (let i = 1; i < n; i++) {
@@ -122,17 +147,29 @@ function attempt(level, key) {
       top.push(top[i - 1] + dir * a); bottom.push(bottom[i - 1] - dir * b);
     }
     if (cls(bottom[n - 1]) !== 0 || ![0, 2].includes(cls(top[n - 1])) || new Set(top).size < 3) return null;
-    return { n, top, bottom, tag: 'contrary' };
+    return { n, top, bottom };
   }
-  if (level === 5) {
-    const bottom = [-7, -4, -3, -7], chords = ['I', 'IV', 'V', 'I'];
-    const top = chords.map((c) => pick(CHORD[c].flatMap((x) => [x, x + 7])));
-    if (!steps(top) || cls(top[3]) !== 0 || top.some((d) => d < 0 || d > 9)) return null;
-    if (cls(top[2]) === 6 && top[3] !== top[2] + 1) return null;
-    if (new Set(top).size < 3) return null;
-    return { n: 4, top, bottom, tag: 'cadence' };
+  if (tex === 'oblique') { // one voice holds while the other moves by step, then they swap
+    const n = pick([4, 5]);
+    const top = [rand(10)], bottom = [-7 - 1 + rand(4)], mover = [];
+    for (let i = 1; i < n; i++) {
+      const who = pick(['top', 'bottom']), d = pick([-2, -1, 1, 2]);
+      mover.push(who);
+      top.push(top[i - 1] + (who === 'top' ? d : 0)); bottom.push(bottom[i - 1] + (who === 'bottom' ? d : 0));
+    }
+    if (!mover.includes('top') || !mover.includes('bottom') || cls(bottom[n - 1]) !== 0 || ![0, 2].includes(cls(top[n - 1]))) return null;
+    return { n, top, bottom };
   }
-  // 6: minor, five notes, one suspension (4-3 or 7-6)
+  if (tex === 'cadence') return cadence(key, [-7, -4, -3, -7]);
+  if (tex === 'minor-cadence') return cadence(key, [-7, -4, -3, -7]);
+  if (tex === 'two-to-one') { // two melody notes per bass note over I–V–I; the weak beats are passing notes
+    const top = [pick(CHORD.I.flatMap((c) => [c, c + 7])), 0, pick(CHORD.V.flatMap((c) => [c, c + 7])), 0, pick([0, 7])];
+    top[1] = top[0] + pick([-2, -1, 1, 2]); top[3] = top[2] + pick([-2, -1, 1, 2]);
+    if (!steps(top) || top.some((d) => d < 0 || d > 9) || new Set(top).size < 4) return null;
+    if (top.some((d, i) => cls(d) === 6 && i !== 3) || (cls(top[3]) === 6 && top[4] !== top[3] + 1)) return null;
+    return { n: 5, top, bottom: [-7, -7, -3, -3, -7], free: [1, 3] };
+  }
+  // suspension: minor, five notes, one suspension (4-3 or 7-6)
   const kind = pick(['43', '76']);
   const b0 = (kind === '43' ? -6 : -4) + rand(5), m0 = kind === '43' ? 3 + rand(6) : 8 + rand(5);
   const top = kind === '43' ? [m0, 7, 7, 6, 7] : [m0, 10, 10, 9, 7];
@@ -141,18 +178,21 @@ function attempt(level, key) {
   return { n: 5, top, bottom, tag: kind === '43' ? 'four-three' : 'seven-six', free: [2] };
 }
 
-function makeQuestion(level) {
-  for (let t = 0; t < 20000; t++) {
-    const key = KEYS[pick(KEYSETS[level])];
-    const c = attempt(level, key);
-    if (!c) continue;
-    const ok = sound(key, c.top, c.bottom, c.free || []);
-    if (!ok) continue;
-    const sp = scaleSpelling(key);
-    const note = (m) => ({ midi: m, ...sp.get(mod(m, 12)) });
-    return { key, level, item: TEXTURE[level], tag: c.tag, n: c.n, top: ok.T.map(note), bottom: ok.B.map(note) };
+/** Keys are drawn in turn (shuffled), so every key of a level gets its share of every texture. */
+function makeQuestion(level, texture = pick(TEXTURES[level])) {
+  for (const name of shuffle(KEYSETS[level])) {
+    const key = KEYS[name];
+    for (let t = 0; t < 6000; t++) {
+      const c = attempt(level, key, texture);
+      if (!c) continue;
+      const ok = sound(key, c.top, c.bottom, c.free || []);
+      if (!ok) continue;
+      const sp = scaleSpelling(key);
+      const note = (m) => ({ midi: m, ...sp.get(mod(m, 12)) });
+      return { key, level, item: texture, texture, tag: c.tag || texture, n: c.n, top: ok.T.map(note), bottom: ok.B.map(note) };
+    }
   }
-  throw new Error('no question');
+  throw new Error('no question: ' + texture);
 }
 
 // ---------- screen ----------
@@ -237,9 +277,7 @@ async function next() {
   let stats = null;
   try { stats = await loadItemMastery(SKILL); } catch { /* plain random */ }
   if (id !== seq) return;
-  const item = pickWeak([TEXTURE[level]], stats);
-  q = makeQuestion(level);
-  q.item = item;
+  q = makeQuestion(level, pickWeak(TEXTURES[level], stats));
   entered = { top: [], bottom: [] }; marks = null; missed = false; locked = false; active = 'top';
   render();
   quietUntil = 0;
@@ -311,10 +349,12 @@ async function check() {
   }
 }
 
-window.__test = { sample: (level, k) => Array.from({ length: k }, () => { const x = makeQuestion(level); return x.tag + ':' + Object.keys(KEYS).find((n) => KEYS[n] === x.key); }), state: () => ({
-  level: q?.level, item: q?.item, tag: q?.tag, n: q?.n, key: q && Object.keys(KEYS).find((k) => KEYS[k] === q.key), sig: q?.key.sig,
-  top: q?.top.map((n) => n.midi), bottom: q?.bottom.map((n) => n.midi), spellTop: q?.top.map((n) => [n.letter, n.acc]), spellBottom: q?.bottom.map((n) => [n.letter, n.acc]),
-  entered: { top: [...entered.top], bottom: [...entered.bottom] }, marks, active, locked, ranges: RANGE,
+const shape = (x) => x && ({
+  level: x.level, item: x.item, texture: x.texture, tag: x.tag, n: x.n, key: Object.keys(KEYS).find((k) => KEYS[k] === x.key), sig: x.key.sig,
+  top: x.top.map((n) => n.midi), bottom: x.bottom.map((n) => n.midi), spellTop: x.top.map((n) => [n.letter, n.acc]), spellBottom: x.bottom.map((n) => [n.letter, n.acc]),
+});
+window.__test = { textures: TEXTURES, sample: (level, k, texture) => Array.from({ length: k }, () => shape(makeQuestion(level, texture))), state: () => ({
+  ...shape(q), entered: { top: [...entered.top], bottom: [...entered.bottom] }, marks, active, locked, ranges: RANGE,
 }) };
 
 game.ready().then(() => {
