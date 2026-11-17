@@ -21,7 +21,6 @@ await page.goto(base);
 await page.waitForFunction(() => window.__test);
 // Musical content of the sampled rounds (steps: { targets, other, kind }), per level and voice setting.
 const VOICES = { child: [60, 69], high: [57, 74], medium: [48, 62], low: [43, 57] };
-let silentRelease = 0;
 const m12 = (x) => ((x % 12) + 12) % 12;
 const CONSONANT = [0, 3, 4, 7, 8, 9];
 function content(level, voice, steps, tag) {
@@ -43,9 +42,9 @@ function content(level, voice, steps, tag) {
     check(steps.length === 2 && kinds[0] === 'tension' && kinds[1] === 'rest', `${tag}: shape ${kinds}`);
     const a = m12(t[0] - steps[0].other[0]);
     check([2, 5, 11, 9].includes(a), `${tag}: tension interval ${a}`);
-    // The bass is held. (Known quirk, reported: with a low voice the release step can end up with no bass note at all, a silent step.)
-    if (!steps[1].other.length) silentRelease++;
-    else check(m12(steps[0].other[0]) === m12(steps[1].other[0]), `${tag}: bass moved`);
+    // The bass is held (the release step always has one: see the bass check below).
+    check(steps[1].other.length > 0, `${tag}: silent release`);
+    if (steps[1].other.length) check(m12(steps[0].other[0]) === m12(steps[1].other[0]), `${tag}: bass moved`);
     const bass = steps[0].other[0];
     for (const r of steps[1].targets) {
       check(Math.abs(r - t[0]) >= 1 && Math.abs(r - t[0]) <= 2 && CONSONANT.includes(m12(r - bass)), `${tag}: release ${r} after ${t[0]} over ${bass}`);
@@ -64,7 +63,7 @@ function content(level, voice, steps, tag) {
   if (level === 11) check((steps.length === 3 || steps.length === 4) && steps.every((x) => x.targets.length === 2), `${tag}: progression`);
 }
 // 0. Bass: in every voice setting and level, each bass note is at least C2 (36) and sounds strictly below
-// the lowest sung note of its step. An empty bass is a silent step, which passes.
+// the lowest sung note of its step. An empty bass is a silent step, allowed only off the release and last steps.
 // Levels 1-2 are not bass levels: the app sings a moving voice above the held note there, by design.
 const N = rounds(150, 40);
 for (const voice of rounds(['child', 'high', 'medium', 'low'], ['child', 'low'])) {
@@ -76,6 +75,12 @@ for (const voice of rounds(['child', 'high', 'medium', 'low'], ['child', 'low'])
       const top = Math.min(...st.targets);
       if (level > 2 && !st.other.every((b) => b >= 36 && b < top)) { bad++; example ??= JSON.stringify(st); }
     }
+    // The release step (after a tension) and the last step carry the resolution: always a bass note, >= C2, below the sung note.
+    if (level > 2) samples.forEach((steps, k) => steps.forEach((st, i) => {
+      if (i !== steps.length - 1 && steps[i - 1]?.kind !== 'tension') return;
+      const top = Math.min(...st.targets);
+      check(st.other.length > 0 && st.other.every((b) => b >= 36 && b < top), `${voice} L${level} #${k}: release step ${i} bass ${JSON.stringify(st.other)} sung ${JSON.stringify(st.targets)}`);
+    }));
     check(samples.length === N && bad === 0, `bass ${voice} L${level}: ${bad} step(s) with a bass note not below the sung note, e.g. ${example}`);
   }
 }
@@ -139,7 +144,6 @@ for (const level of levels(11, [1, 6, 11])) {
   check(!overflow, `L${level}: overflow`);
   console.log(`L${level}`, mine.map((a) => `${a.skill} ${a.item} ${a.ok}`).join(' | '));
 }
-if (silentRelease) console.log(`NOTE: ${silentRelease} sampled round(s) of levels 3-4 had no bass note on the release step`);
 // Settings: voice, accuracy and headphones are saved, applied after a reload, and change the behaviour.
 await page.evaluate(() => localStorage.setItem('ml:settings:second-voice', JSON.stringify({ level: 1, voice: 'child', tolerance: 50, phones: false })));
 await page.reload();

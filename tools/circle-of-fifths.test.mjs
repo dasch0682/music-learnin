@@ -44,6 +44,7 @@ function chordOk(chord, pos, ring) {
   return chord && mod(chord[0], 12) === root && triad(root, ring === 'm') === [...new Set(chord.map((m) => mod(m, 12)))].sort((a, b) => a - b).join();
 }
 
+const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const st = () => page.evaluate(() => window.__test.state());
 const hit = (pos, ring) => `g[data-pos="${pos}"][data-ring="${ring}"] .cf-hit`;
 async function tapKey(key) {
@@ -87,8 +88,10 @@ for (const level of levels(6)) {
         const [w1, w2] = s.choices.filter((c) => c !== n);
         await page.click(`.cf-choices button[data-v="${w1}"]`);
         check((await fbSince(page, fb0, 1))[0] === 'bad', `L4: wrong signature gave no error feedback`);
-        // second miss: feedback again, logged once. NOTE: the right choice is not revealed after it (reported).
+        check((await page.$$('.cf-choices .ml-reveal')).length === 0, `L4: right choice revealed after the first miss`);
+        // second miss: feedback again, logged once.
         await page.click(`.cf-choices button[data-v="${w2}"]`);
+        check(eq(await page.$$eval('.cf-choices .ml-reveal', (b) => b.map((x) => +x.dataset.v)), [n]), `L4: right choice not revealed after the second miss`);
         check((await fbSince(page, fb0 + 1, 1))[0] === 'bad', `L4: second wrong signature gave no error feedback`);
         check((await attempts()).length === before + 1, `L4: second miss logged again`);
       }
@@ -106,8 +109,12 @@ for (const level of levels(6)) {
         check((await fbSince(page, fb0, 1))[0] === 'bad', `L${level}: wrong tap gave no error feedback`);
         await page.waitForFunction(() => window.__test.state().idx === 0, null, { timeout: 5000 }).catch(() => {});
         check((await st()).idx === 0, 'a wrong tap restarts the sequence');
-        // second miss: feedback again, logged once. NOTE: no reveal of the answer after it (reported).
+        // second miss: feedback again, logged once.
+        check((await page.$$('.cf-seg.ml-reveal')).length === 0, `L${level}: answer revealed after the first miss`);
         await tapKey(bad[0]);
+        const want = s.steps.flat().map((k) => k.split(':')[0] + ':' + k.split(':')[1]).sort();
+        const got = await page.$$eval('.cf-seg.ml-reveal', (g) => g.map((x) => x.dataset.pos + ':' + x.dataset.ring).sort());
+        check(eq(got, want), `L${level}: reveal after the second miss ${got} vs ${want}`);
         check((await fbSince(page, fb0 + 1, 1))[0] === 'bad', `L${level}: second wrong tap gave no error feedback`);
         await page.waitForFunction(() => window.__test.state().idx === 0, null, { timeout: 5000 }).catch(() => {});
         check((await attempts()).length === before + 1, `L${level}: second miss logged again`);

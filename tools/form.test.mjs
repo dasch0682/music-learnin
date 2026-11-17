@@ -117,11 +117,9 @@ for (const level of levels(6)) {
       check(!(await page.$('.ml-reveal')) || i === 1, `${tag}: answer revealed too early`);
     }
     if (nWrong === 2) {
-      // NOTE: at level 6 (modulation) the answer is not revealed after the second miss: the reveal looks in .fm-choices, which is empty there (reported).
-      if (s.kind !== 'mod') {
-        await page.waitForSelector(`${sel(expected)}.ml-reveal`, { timeout: 3000 }).catch(() => {});
-        check(!!(await page.$(`${sel(expected)}.ml-reveal`)), `${tag}: right answer not revealed after the second miss`);
-      }
+      await page.waitForSelector(`${sel(expected)}.ml-reveal`, { timeout: 3000 }).catch(() => {});
+      check(!!(await page.$(`${sel(expected)}.ml-reveal`)), `${tag}: right answer not revealed after the second miss`);
+      check((await page.$$('.ml-reveal')).length === 1, `${tag}: more than one revealed element`);
     }
     if (fill) for (const c of s.seq.slice(s.pos)) await page.click(sel(c));
     else await page.click(sel(s.answer));

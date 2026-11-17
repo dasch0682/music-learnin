@@ -63,9 +63,29 @@ function rules(level, s) {
     const [lo, hi] = s.clef === 'bass' ? [43, 60] : [60, 76];
     check(m.every((x) => x >= lo && x <= hi), `${where}: range for ${s.clef}`);
   }
+  {
+    const chrom = level === 6 ? new Set(m.map((x, i) => (scalePcs(key, MAJ).has(pc(x)) ? -1 : i)).filter((i) => i >= 0)) : new Set();
+    const bad = forbidden(m, s.spelling, (i) => chrom.has(i));
+    check(!bad.length, `${where}: augmented/diminished melodic interval ${bad}`);
+    if (level === 5) m.forEach((x, i) => { if (pc(x) === pc(TONIC[key] + 11)) check(m[i + 1] === x + 1, `${where}: raised seventh at ${i} does not resolve up to the tonic`); });
+  }
   if (level < 6) check(s.clef === 'treble', `${where}: clef`);
 }
 
+// Melodic intervals from the spelling (letter distance + semitones, not semitones alone): no augmented or diminished one.
+// Level labels do not mention the augmented second of harmonic minor, so it is forbidden too. The one exception:
+// the chromatic passing notes of level 6 (C to C#, an augmented unison, is how a chromatic step is written).
+const PLAIN = [[0], [1, 2], [3, 4], [5], [7], [8, 9], [10, 11]];
+const stepOf = (midi, [l, a]) => Math.floor((midi - a) / 12) * 7 + l;
+function forbidden(m, sp, skip = () => false) {
+  const out = [];
+  for (let i = 1; i < m.length; i++) {
+    if (skip(i - 1) || skip(i)) continue;
+    const steps = Math.abs(stepOf(m[i], sp[i]) - stepOf(m[i - 1], sp[i - 1]));
+    if (!PLAIN[steps % 7].includes(Math.abs(m[i] - m[i - 1]) - 12 * Math.floor(steps / 7))) out.push(`${m[i - 1]}->${m[i]} (${steps} letter steps)`);
+  }
+  return out;
+}
 const key = (midi) => `.md-kb [data-midi="${midi}"]`;
 async function enter(list) { for (const m of list) await page.click(key(m)); }
 async function settle() { await page.waitForFunction(() => window.__test.state().marks); }

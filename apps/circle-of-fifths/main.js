@@ -280,12 +280,14 @@ function tap(p, ring) {
   if (g.classList.contains('cf-wrong') || g.classList.contains('cf-found')) return;
   if (q.steps[q.idx].includes(key)) {
     g.classList.add('cf-found');
+    g.classList.remove('ml-reveal');
     setLabel(key, nameOfKey(key));
     q.names[key] = null;
     q.idx++;
     if (q.idx === q.steps.length) won();
   } else {
     g.classList.add('cf-wrong');
+    if (missed) for (const k of q.steps.flat()) if (!segs.get(k).classList.contains('cf-found')) segs.get(k).classList.add('ml-reveal'); // 2nd miss: show the answer
     wrong(key);
     if (q.steps.length > 1 && q.idx > 0) {
       // A sequence starts again from the beginning.
@@ -303,6 +305,7 @@ function answerChoice(n, button) {
   } else {
     button.classList.add('ml-wrong');
     button.disabled = true;
+    if (missed) choices.querySelector(`[data-v="${q.answer}"]`)?.classList.add('ml-reveal'); // 2nd miss: show the answer
     wrong(sigItem(n));
   }
 }

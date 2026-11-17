@@ -176,11 +176,14 @@ for (const level of levels(8)) {
           check((await st()).step === k, 'L8: a wrong label does not advance');
           check((await fbSince(page, fb0, 1))[0] === 'bad', 'L8: wrong label gave no error feedback');
           await page.waitForFunction(() => !window.__test.state().slots.some((x) => x.status === 'wrong'), null, { timeout: 5000 }).catch(() => {});
-          // second miss: feedback again, logged once (NOTE: the right label is not revealed after it: reported)
+          // second miss: feedback again, logged once
+          check((await page.$$('.hl-block.ml-reveal')).length === 0, 'L8: label revealed after the first miss');
           const wrong2 = ['rest', 'move', 'tension'].filter((f) => f !== fam && f !== wrong)[0] || wrong;
           await page.click(tray(wrong2));
           check((await fbSince(page, fb0 + 1, 1))[0] === 'bad', 'L8: second wrong label gave no error feedback');
           check((await attempts()).length === before + 1, 'L8: second wrong label logged again');
+          const rl = await page.$$eval('.hl-block.ml-reveal', (b) => b.map((x) => x.dataset.id));
+          check(rl.length === 1 && rl[0] === fam, `L8: reveal after the second miss ${rl} vs ${fam}`);
           await page.waitForFunction(() => !window.__test.state().slots.some((x) => x.status === 'wrong'), null, { timeout: 5000 }).catch(() => {});
         }
         await page.click(tray(fam));
@@ -207,11 +210,14 @@ for (const level of levels(8)) {
         const cleared = await st();
         check(cleared.slots.filter((x) => !x.given && !x.placed).length === 1 && cleared.qid === s.qid, `L${level}: only the wrong slot is cleared`);
         const [i, ids] = exp[exp.length - 1];
-        // second miss on the same question: feedback again, logged once. NOTE: no reveal of the right block after it (reported).
+        check((await page.$$('.hl-block.ml-reveal')).length === 0, `L${level}: right block revealed after the first miss`);
+        // second miss on the same question: feedback again, logged once.
         await clickBlock(s, s.blocks.find((b) => !ids.includes(b.id)).id);
         await page.click('.hl-ok');
         check((await fbSince(page, fb0 + 1, 1))[0] === 'bad', `L${level}: second wrong answer gave no error feedback`);
         check((await attempts()).length === before + 1, `L${level}: second miss logged again`);
+        const rb = await page.$$eval('.hl-block.ml-reveal', (b) => b.map((x) => x.dataset.id).sort());
+        check(same(rb, [...ids].sort()), `L${level}: reveal after the second miss ${rb} vs ${ids}`);
         await page.waitForFunction(() => window.__test.state().slots.filter((x) => !x.given && !x.placed).length === 1, null, { timeout: 8000 }).catch(() => {});
         await clickBlock(s, ids[0]);
       } else {

@@ -343,8 +343,16 @@ async function build(level, voice = game.settings.voice) {
   const shown = steps.flatMap((s) => (s.show ? s.targets : []));
   const offs = shown.length ? shown : [0, 7];
   const min = Math.min(...offs), max = Math.max(...offs);
-  const keys = [];
+  let keys = [];
   for (let t = lo - min; t <= hi - max; t++) keys.push(t);
+  // Bass levels: the release (the step after a tension) and the last step carry the resolution, so they always keep a bass.
+  // A key that leaves no room for it under the sung note (low voice: tonic under C3) is not drawn, unless none is left.
+  if (level > 2) {
+    const needs = (i) => i === steps.length - 1 || steps[i - 1]?.kind === 'tension';
+    const fits = (t) => steps.every((s, i) => !needs(i) || bassPlace(s.other.map((x) => t + x), s.targets.map((x) => t + x), s.chord ? s.chord.tones.slice(0, 3).map((x) => t + x) : []).length);
+    const ok = keys.filter(fits);
+    if (ok.length) keys = ok;
+  }
   const tonic = keys.length ? pick(keys) : Math.round((lo + hi) / 2 - (min + max) / 2);
   for (const s of steps) {
     s.targets = s.targets.map((x) => tonic + x);
