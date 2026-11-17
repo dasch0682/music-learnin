@@ -146,6 +146,18 @@ const ONLY = process.env.LEVELS ? process.env.LEVELS.split(',').map(Number) : nu
 for (let level = 1; level <= 6; level++) {
   if (ONLY && !ONLY.includes(level)) continue;
   // structure of several random melodies (reload = new melody)
+  if (level === 3) {
+    // Level 3 must never be thin: at least 200 melodies, each with 3 or more distinct pitches and 3 or more notes.
+    let thin = 0;
+    for (let k = 0; k < 200; k++) {
+      await load(level);
+      const s = await state();
+      const distinct = new Set(s.pitches).size;
+      if (distinct < 3 || s.pitches.length < 3) { thin++; if (thin <= 5) check(false, `L3 melody ${k}: ${s.pitches.length} notes, ${distinct} distinct ${s.pitches}`); }
+    }
+    check(thin === 0, `L3: ${thin} of 200 melodies too thin`);
+    console.log('L3 distinct-pitch check: 200 melodies, ' + (thin ? thin + ' thin' : 'none thin'));
+  }
   for (let k = 0; k < 4; k++) {
     await load(level);
     const s = await state();
