@@ -67,7 +67,7 @@ function checkTheory(s, tag) {
   if (level === 4) {
     check(s.fifths === 1 || s.fifths === -1, `${tag}: L4 key ${s.fifths}`);
     check(s.notes.some((n, i) => n.d === 1.5 && s.notes[i + 1]?.d === 0.5), `${tag}: L4 dotted quarter + eighth`);
-    check(pitches.every((p) => p >= 62 && p <= 79), `${tag}: L4 range`);
+    check(pitches.every((p) => p >= 60 && p <= 79), `${tag}: L4 range`); // F major reaches down to C4
   }
   if (level === 5) {
     check(s.meter === '3/4' || s.meter === '6/8', `${tag}: L5 meter`);
