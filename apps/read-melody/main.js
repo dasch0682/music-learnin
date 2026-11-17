@@ -9,7 +9,7 @@ import './style.css';
 const L = (en, fr) => ({ en, fr });
 const game = createGame({
   id: 'read-melody',
-  title: L('Read and play', 'Lis et joue'),
+  title: L('Play what you read', 'Joue ce que tu lis'),
   strings: {
     play: L('Play', 'Jouer'),
     listen: L('Listen', 'Écouter'),

@@ -10,6 +10,7 @@ const L = (en, fr) => ({ en, fr });
 const MAX_LEVEL = 6;
 const game = createGame({
   id: 'ear-cadences',
+  ear: true,
   title: L('Guess the ending', 'Devine la fin'),
   strings: {
     replay: L('Listen again', 'Réécouter'),
@@ -71,7 +72,7 @@ function voice(key, roman) {
   return [43 + mod(key + root - 43, 12), ...tones];
 }
 
-let q = null, started = 0, streak = 0, last = null, missed = false, locked = false, seq = 0, quietUntil = 0, timer = 0;
+let q = null, started = 0, streak = 0, last = null, missed = false, misses = 0, locked = false, seq = 0, quietUntil = 0, timer = 0;
 const replay = game.h('button', { className: 'ml-round', innerHTML: PLAY });
 const choices = game.h('div', { className: 'cd-choices' });
 const nextBtn = game.h('button', { className: 'ml-btn ml-primary cd-next' });
@@ -122,6 +123,7 @@ async function next() {
   const romans = pick(CADENCES[type][mode ? 'min' : 'maj']);
   q = { level, skill: cfg.skill, item, type, types: cfg.types, icons: !!cfg.icons, romans, chords: romans.map((r) => voice(key, r)) };
   missed = false;
+  misses = 0;
   locked = false;
   render();
   quietUntil = 0;
@@ -137,12 +139,12 @@ async function answer(type, button) {
   if (ok) {
     locked = true;
     button.classList.add('ml-right');
-    if (missed) game.flash(true); // only the first answer of a question is logged
+    if (missed) game.flash(true, { revealed: misses >= 2 }); // only the first answer of a question is logged
     else {
       streak++;
       if (streak >= 10) {
         if (q.level < MAX_LEVEL) nextBtn.classList.add('cd-show');
-        else if (streak === 10) game.say(game.t('top'));
+        else if (streak === 10) game.celebrate(game.t('top'));
       }
       await game.attempt(rec);
     }
@@ -151,6 +153,8 @@ async function answer(type, button) {
     button.classList.add('ml-wrong');
     button.disabled = true;
     streak = 0;
+    misses++;
+    if (misses === 2) choices.querySelector(`[data-type="${q.type}"]`)?.classList.add('ml-reveal'); // second miss: show the answer
     nextBtn.classList.remove('cd-show');
     if (missed) game.flash(false);
     else { missed = true; await game.attempt(rec); }

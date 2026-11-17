@@ -6,7 +6,9 @@ import './core.css';
 import { getLang, setLang, onLang, tr, createT } from './i18n.js';
 import { getSettings, saveSettings, logAttempt, clearAttempts } from './storage.js';
 import { exportSettings, exportResults, importFile } from './transfer.js';
-import { audio, sfx } from './audio.js';
+import { audio, sfx, SFX_MS } from './audio.js';
+import { getFeedback, setFeedback, FEEDBACK_MODES, MODE_LABELS, pickMessage } from './feedback.js';
+import { onProfile } from './profiles.js';
 import { registerSW } from './update.js';
 
 const UI = {
@@ -29,6 +31,10 @@ const UI = {
   close: { en: 'Close', fr: 'Fermer' },
   start: { en: 'Start', fr: 'Commencer' },
   home: { en: 'Home', fr: 'Accueil' },
+  feedback: { en: 'Feedback', fr: 'Retours' },
+  vibration: { en: 'Vibration', fr: 'Vibration' },
+  correct: { en: 'Correct', fr: 'Juste' },
+  tryAgain: { en: 'Try again', fr: 'Essaie encore' },
 };
 const ui = createT(UI);
 
@@ -37,6 +43,22 @@ export function applyTheme(theme = localStorage.getItem('ml:theme') || 'auto') {
   localStorage.setItem('ml:theme', theme);
   if (theme === 'auto') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = theme;
+}
+
+/** Feedback mode select + vibration toggle (shared by the settings dialogs of games and pages).
+ *  onChange runs after a change. Returns an array of nodes. */
+export function feedbackFields(onChange) {
+  const fb = getFeedback();
+  const sel = h('select', {}, ...FEEDBACK_MODES.map((m) => h('option', { value: m, textContent: tr(MODE_LABELS[m]), selected: m === fb.mode })));
+  sel.setAttribute('aria-label', ui('feedback'));
+  sel.onchange = () => { setFeedback({ mode: sel.value }); onChange?.(); };
+  const out = [h('label', { className: 'ml-field ml-fb-mode' }, h('span', { textContent: ui('feedback') }), sel)];
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    const box = h('input', { type: 'checkbox', checked: fb.haptics });
+    box.onchange = () => { setFeedback({ haptics: box.checked }); onChange?.(); };
+    out.push(h('label', { className: 'ml-field ml-fb-haptics' }, h('span', { textContent: ui('vibration') }), box));
+  }
+  return out;
 }
 
 function head(home) {
@@ -84,6 +106,8 @@ function applyUrlLevel(config, settings) {
  *     { key, label: {en,fr}, type: 'range', min, max, step, default },
  *   ],
  *   home: '../',                                // path to the hub (default '../')
+ *   quiet: (ms) => {},                          // optional: called with the length of every shell sound, before it starts (microphone games)
+ *   ear: true,                                  // optional: listening game (allows the "good ear" messages)
  * }
  */
 export function createGame(config) {
@@ -97,23 +121,37 @@ export function createGame(config) {
   const emit = (ev) => handlers[ev].forEach((fn) => fn(ev === 'lang' ? getLang() : settings));
   const t = createT(config.strings || {});
   let score = 0;
+  let fb = getFeedback();
+  const applyFb = () => { fb = getFeedback(); document.documentElement.dataset.fb = fb.mode; };
+  applyFb();
+  onProfile(applyFb);
 
   const titleEl = h('span', { className: 'ml-title' });
   const scoreEl = h('span', { className: 'ml-score', textContent: '0' });
   const gear = h('button', { className: 'ml-icon', textContent: '⚙' });
   const homeEl = h('a', { className: 'ml-icon', href: home, textContent: '⌂' });
-  const bar = h('header', { className: 'ml-bar' }, homeEl, titleEl, scoreEl, gear);
+  const fbGlyph = h('span', { className: 'ml-fb-glyph' });
+  fbGlyph.setAttribute('aria-hidden', 'true');
+  const fbText = h('span', { className: 'ml-sr' });
+  const fbEl = h('span', { className: 'ml-fb' }, fbGlyph, fbText);
+  fbEl.setAttribute('aria-live', 'polite');
+  fbEl.setAttribute('role', 'status');
+  const bar = h('header', { className: 'ml-bar' }, homeEl, titleEl, fbEl, scoreEl, gear);
   const stage = h('main', { className: 'ml-stage' });
   const toast = h('div', { className: 'ml-toast' });
   const dialog = h('dialog', { className: 'ml-settings' });
   document.body.classList.add('ml-game');
   document.body.append(bar, stage, toast, dialog);
 
-  const say = (msg) => {
+  // Toasts: say() and celebrate() always show; shell messages never replace one shown less than 2.2 s ago.
+  let toastTimer = 0, lastSayAt = -1e9, lastMsgAt = -1e9;
+  const showToast = (msg, ms) => {
     toast.textContent = msg;
     toast.classList.add('ml-show');
-    setTimeout(() => toast.classList.remove('ml-show'), 2200);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('ml-show'), ms);
   };
+  const say = (msg) => { lastSayAt = performance.now(); showToast(msg, 2200); };
 
   const segmented = (value, options, onPick) => h('div', { className: 'ml-seg' }, ...options.map(([v, label]) => {
     const b = h('button', { textContent: label, className: v === value ? 'ml-on' : '' });
@@ -145,7 +183,7 @@ export function createGame(config) {
       const r = await importFile(kind);
       if (r.cancelled) return;
       if (r.kind === 'results') say(ui('imported', { n: r.added }));
-      else { Object.assign(settings, getSettings(config.id, defaults)); say(ui('importedSettings')); emit('settings'); renderDialog(); }
+      else { Object.assign(settings, getSettings(config.id, defaults)); applyFb(); say(ui('importedSettings')); emit('settings'); renderDialog(); }
     } catch { say(ui('badFile')); }
   }
 
@@ -159,6 +197,7 @@ export function createGame(config) {
         segmented(getLang(), [['fr', 'Français'], ['en', 'English']], (v) => setLang(v))),
       h('div', { className: 'ml-field' }, h('span', { textContent: ui('theme') }),
         segmented(theme, [['auto', ui('auto')], ['light', ui('light')], ['dark', ui('dark')]], (v) => { applyTheme(v); renderDialog(); })),
+      ...feedbackFields(applyFb),
       h('h3', { textContent: ui('data') }),
       h('div', { className: 'ml-data' },
         btn(ui('exportSettings'), () => exportSettings(config.id)),
@@ -183,6 +222,128 @@ export function createGame(config) {
   onLang(() => { renderChrome(); emit('lang'); });
   renderChrome();
 
+  // ---- Feedback (docs/feedback-spec.md): one place for sound, stage tint, badge, score pulse, stars and toast.
+  let streak = 0, qMisses = 0, qn = 0, badQ = -5, soundUntil = 0, soundName = null;
+  const recent = [];
+  const timers = {};
+  const once = (key, fn, ms) => { clearTimeout(timers[key]); timers[key] = setTimeout(fn, ms); };
+  const log = (rec) => { const l = (window.__fb = window.__fb || []); l.push(rec); if (l.length > 50) l.shift(); };
+
+  function stars() {
+    const old = document.querySelector('.ml-stars');
+    old?.remove();
+    const r = scoreEl.getBoundingClientRect();
+    const box = h('div', { className: 'ml-stars' });
+    box.style.left = r.left + r.width / 2 + 'px';
+    box.style.top = r.top + r.height / 2 + 'px';
+    box.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < 5; i++) {
+      const a = (Math.PI * 2 * i) / 5 + 0.3, d = 24 + (i % 2) * 16;
+      const sp = h('span', { textContent: '★' });
+      sp.style.setProperty('--dx', Math.round(Math.cos(a) * d) + 'px');
+      sp.style.setProperty('--dy', Math.round(Math.sin(a) * d) + 'px');
+      box.append(sp);
+    }
+    document.body.append(box);
+    once('stars', () => box.remove(), 700);
+  }
+  function pulse() {
+    scoreEl.classList.remove('ml-pulse');
+    void scoreEl.offsetWidth;
+    scoreEl.classList.add('ml-pulse');
+    once('pulse', () => scoreEl.classList.remove('ml-pulse'), 400);
+  }
+  function badge(bad) {
+    fbEl.classList.remove('ml-fb-good', 'ml-fb-bad');
+    fbEl.classList.add('ml-show', bad ? 'ml-fb-bad' : 'ml-fb-good');
+    fbGlyph.textContent = bad ? '↺' : '✓';
+    fbText.textContent = ui(bad ? 'tryAgain' : 'correct');
+    once('badge', () => fbEl.classList.remove('ml-show'), 700);
+  }
+
+  // kind: 'good' | 'bad' | 'streak' (a good answer that reaches a milestone) | 'level'.
+  // o: { silent, haptic, message } for callers; { bank, n, milestone } are set by the shell itself.
+  function run(kind, o = {}) {
+    const mode = fb.mode, enc = mode === 'encouraging', loud = mode === 'normal' || enc;
+    const answer = kind !== 'level';
+    const bad = kind === 'bad';
+    let sound = null;
+    if (loud && !o.silent) {
+      if (kind === 'good') sound = enc ? 'good-warm' : 'good';
+      else if (bad) sound = enc ? 'bad-soft' : 'bad';
+      else if (kind === 'streak') sound = enc ? 'cheer' : 'good';
+      else sound = 'cheer';
+    }
+    const now = performance.now();
+    if (sound && now < soundUntil && (sound === 'cheer' || soundName === 'cheer')) sound = null; // a cheer never stacks with another sound
+    let ms = 0;
+    if (sound) {
+      ms = SFX_MS[sound];
+      soundUntil = now + ms;
+      soundName = sound;
+      try { config.quiet?.(ms); sfx(sound); } catch { /* no audio */ }
+    }
+    let haptic = false;
+    if (fb.haptics && mode !== 'silent' && o.haptic !== false && !config.quiet && navigator.vibrate) {
+      haptic = navigator.vibrate(sound === 'cheer' || kind === 'level' ? [12, 40, 12, 40, 24] : bad ? [18, 50, 18] : 12);
+    }
+    let visual = 'none';
+    if (answer) {
+      visual = mode === 'discreet' ? 'none' : bad && mode === 'normal' ? 'tint+shake' : 'tint';
+      stage.classList.remove('ml-good', 'ml-bad');
+      void stage.offsetWidth;
+      stage.classList.add(bad ? 'ml-bad' : 'ml-good');
+      badge(bad);
+      if (enc && !bad) pulse();
+      if (kind === 'streak' && mode === 'normal') pulse();
+    } else if (loud) visual = enc ? 'stars' : 'pulse';
+    if ((kind === 'streak' || kind === 'level') && enc) { stars(); visual = visual === 'none' ? 'stars' : visual + '+stars'; }
+    if (kind === 'level' && mode === 'normal') pulse();
+    let message = null;
+    if (o.message != null) { message = o.message; say(message); }
+    else if (o.bank && enc && now - lastSayAt >= 2200 && (o.milestone || now - lastMsgAt >= 8000)) {
+      const raw = pickMessage(o.bank, getLang(), recent, { ear: !!config.ear });
+      if (raw) {
+        message = raw.replaceAll('{n}', o.n ?? '');
+        recent.push(raw);
+        if (recent.length > 3) recent.shift();
+        lastMsgAt = now;
+        showToast(message, 1600);
+      }
+    }
+    const rec = { kind, mode, sound, ms, visual, message, haptic: !!haptic, t: Math.round(now) };
+    log(rec);
+    return rec;
+  }
+
+  // An answer. counted: it comes from attempt() (streak and praise); flash() only gives the cue.
+  const MILESTONES = (n) => n === 5 || n === 10 || n === 20 || (n > 20 && n % 20 === 0);
+  function judge(correct, o = {}) {
+    if (!correct) {
+      const first = qMisses === 0;
+      qMisses++;
+      streak = 0;
+      const rec = run('bad', { ...o, bank: first && qn - badQ !== 1 ? 'bad' : null });
+      if (first && rec.message) badQ = qn;
+      return rec;
+    }
+    const recovery = qMisses > 0;
+    const revealed = !!o.revealed || qMisses >= 2; // the answer was shown: no praise
+    qMisses = 0;
+    qn++;
+    let kind = 'good', bank = null, milestone = false;
+    if (o.counted && !revealed) streak++;
+    if (!revealed) {
+      if (recovery) bank = 'recovery';
+      else if (o.counted) {
+        if (fb.mode === 'encouraging' && MILESTONES(streak)) { kind = 'streak'; bank = 'streak'; milestone = true; }
+        else if (fb.mode === 'normal' && streak % 10 === 0) kind = 'streak';
+        else if (streak === 3) bank = 'good';
+      }
+    }
+    return run(kind, { ...o, bank, n: streak, milestone });
+  }
+
   const game = {
     id: config.id,
     /** Element where the game draws itself. */
@@ -200,19 +361,23 @@ export function createGame(config) {
     set(key, value) { settings[key] = value; saveSettings(config.id, settings); emit('settings'); },
     setScore(n) { score = n; scoreEl.textContent = n; },
     get score() { return score; },
-    /** Visual + sound feedback only. */
-    flash(correct, { silent = false } = {}) {
-      stage.classList.remove('ml-good', 'ml-bad');
-      void stage.offsetWidth;
-      stage.classList.add(correct ? 'ml-good' : 'ml-bad');
-      if (!silent) sfx(correct ? 'good' : 'bad');
-    },
+    /** Feedback only (cue for the active mode), no log, no streak. { silent, haptic, revealed }. */
+    flash(correct, o = {}) { judge(correct, o); },
+    /** One place for every cue: kind 'good' | 'bad' | 'streak' | 'level'. { silent, haptic, message } */
+    feedback(kind, o = {}) { return run(kind, o); },
+    /** Level-up or "top" toast, with the cheer and stars of the mode. */
+    celebrate(message) { return run('level', { message }); },
+    /** Clean successes in a row, as counted by the shell. */
+    get streak() { return streak; },
+    /** { mode, haptics } of the active profile. */
+    get fb() { return fb; },
     /** Record an answer in the shared log, update score, give feedback.
-     *  a: { skill, correct, ms?, level?, item?, detail?, silent? } */
+     *  a: { skill, correct, ms?, level?, item?, detail?, silent?, haptic?, revealed? } */
     async attempt(a) {
+      const { silent, haptic, revealed, ...rec } = a;
       if (a.correct) game.setScore(score + 1);
-      game.flash(a.correct, { silent: a.silent });
-      return logAttempt({ game: config.id, ...a });
+      judge(a.correct, { silent, haptic, revealed, counted: true });
+      return logAttempt({ game: config.id, ...rec });
     },
     /** Show a big start button; resolves after the tap (this unlocks audio on mobile). */
     ready(label) {

@@ -158,10 +158,59 @@ export function tap({ when = 0, gain = 0.35, pitch = 220 } = {}) {
   o.stop(t0 + 0.16);
 }
 
-/** Feedback sound: 'good' | 'bad'. */
-export function sfx(kind) {
-  if (kind === 'good') { playNote(84, { dur: 0.08, gain: 0.12, timbre: 'pad' }); playNote(91, { dur: 0.14, when: 0.08, gain: 0.12, timbre: 'pad' }); }
-  else playNote(46, { dur: 0.2, gain: 0.14, timbre: 'pluck' });
+// Feedback sounds (docs/feedback-spec.md): glides and noise only, no steady pitch, so no key or interval is suggested.
+// Each voice: [at s, type, f0 Hz, f1 Hz, glide s, envelope length s, peak, lowpass Hz]. Envelope: 8 ms attack, exponential decay.
+const SFX = {
+  good: { ms: 140, voices: [[0, 'sine', 620, 930, 0.09, 0.14, 0.07]] },
+  bad: { ms: 200, voices: [[0, 'sine', 300, 210, 0.15, 0.2, 0.06, 800]] },
+  'good-warm': { ms: 240, voices: [[0, 'triangle', 520, 780, 0.08, 0.15, 0.06, 1800], [0.09, 'triangle', 700, 1050, 0.1, 0.15, 0.06, 1800]] },
+  'bad-soft': { ms: 220, voices: [[0, 'sine', 330, 260, 0.18, 0.22, 0.045]] },
+  cheer: { ms: 420, voices: [[0, 'triangle', 660, 990, 0.09, 0.14, 0.06], [0.09, 'triangle', 830, 1245, 0.09, 0.14, 0.06], [0.18, 'triangle', 990, 1480, 0.09, 0.24, 0.06]], noise: [0.1, 0.12, 0.015] },
+};
+/** Length in ms of each feedback sound. */
+export const SFX_MS = Object.fromEntries(Object.entries(SFX).map(([k, v]) => [k, v.ms]));
+
+function envelope(ctx, t, len, peak) {
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(peak, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+  return g;
+}
+
+/** Feedback sound: 'good' | 'bad' | 'good-warm' | 'bad-soft' | 'cheer'. Returns its length in ms (0 for an unknown name). */
+export function sfx(name, { gain = 1 } = {}) {
+  const spec = SFX[name];
+  if (!spec) return 0;
+  const ctx = audio();
+  const t0 = ctx.currentTime;
+  for (const [at, type, f0, f1, glide, len, peak, lp] of spec.voices) {
+    const t = t0 + at;
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f1, t + glide);
+    let node = o;
+    if (lp) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lp; o.connect(f); node = f; }
+    node.connect(envelope(ctx, t, len, peak * gain)).connect(master);
+    o.start(t);
+    o.stop(t + len);
+  }
+  if (spec.noise) {
+    const [at, len, peak] = spec.noise;
+    const t = t0 + at;
+    const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * len), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 6000;
+    src.connect(hp).connect(envelope(ctx, t, len, peak * gain)).connect(master);
+    src.start(t);
+  }
+  return spec.ms;
 }
 
 /** Sustained drone until the returned stop() is called. */

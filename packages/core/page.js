@@ -1,9 +1,10 @@
 // Shell for non-game pages (home, mastery map): top bar + global settings dialog.
 import '@fontsource/noto-music/music-400.css';
 import './core.css';
-import { getLang, setLang, onLang, createT } from './i18n.js';
+import { getLang, setLang, onLang, createT, tr } from './i18n.js';
 import { exportSettings, exportResults, importFile } from './transfer.js';
-import { applyTheme, h } from './shell.js';
+import { applyTheme, h, feedbackFields } from './shell.js';
+import { getFeedback, setFeedback, FEEDBACK_MODES, MODE_LABELS } from './feedback.js';
 import { registerSW } from './update.js';
 import { listProfiles, activeId, activeProfile, setActive, addProfile, renameProfile, onProfile, profileName, initialOf } from './profiles.js';
 import { removeProfile } from './storage.js';
@@ -33,11 +34,15 @@ const ui = createT({
   confirmDel: { en: 'Delete {name} and all results?', fr: 'Supprimer {name} et tous ses résultats ?' },
   yes: { en: 'Delete', fr: 'Supprimer' },
   no: { en: 'Keep', fr: 'Garder' },
+  feedback: { en: 'Feedback', fr: 'Retours' },
 });
 
 /** createPage({ home: './' | '../', showHome, render(main) }) — render is called again on language or data change. */
 export function createPage({ home = './', showHome = false, title, render }) {
   applyTheme();
+  const applyFb = () => { document.documentElement.dataset.fb = getFeedback().mode; };
+  applyFb();
+  onProfile(applyFb);
   const add = (attrs) => document.head.append(Object.assign(document.createElement('link'), attrs));
   add({ rel: 'manifest', href: home + 'manifest.webmanifest' });
   add({ rel: 'icon', href: home + 'icon.svg' });
@@ -85,8 +90,12 @@ export function createPage({ home = './', showHome = false, title, render }) {
       const input = h('input', { type: 'text', value: p.name, placeholder: profileName(p, getLang()), maxLength: 24 });
       input.setAttribute('aria-label', ui('name'));
       input.onchange = () => { renameProfile(p.id, input.value); };
+      const sel = h('select', {}, ...FEEDBACK_MODES.map((m) => h('option', { value: m, textContent: tr(MODE_LABELS[m]), selected: m === getFeedback(p.id).mode })));
+      sel.setAttribute('aria-label', ui('feedback') + ': ' + profileName(p, getLang()));
+      sel.onchange = () => { setFeedback({ mode: sel.value }, p.id); if (p.id === activeId()) applyFb(); };
       const row = h('div', { className: 'ml-prow' + (p.id === act ? ' ml-active' : '') }, c, input);
       if (listProfiles().length > 1) row.append(h('button', { className: 'ml-btn ml-del', textContent: ui('del'), onclick: () => { confirming = p.id; renderProfiles(); } }));
+      row.append(h('label', { className: 'ml-pfb' }, h('span', { textContent: ui('feedback') }), sel));
       return row;
     });
     const nameIn = h('input', { type: 'text', placeholder: ui('name'), maxLength: 24 });
@@ -111,6 +120,7 @@ export function createPage({ home = './', showHome = false, title, render }) {
     try {
       const r = await importFile(kind);
       if (r.cancelled) return;
+      applyFb();
       say(r.kind === 'results' ? ui('imported', { n: r.added }) : ui('importedSettings'));
       refresh();
     } catch { say(ui('badFile')); }
@@ -124,6 +134,7 @@ export function createPage({ home = './', showHome = false, title, render }) {
       h('div', { className: 'ml-field' }, h('span', { textContent: ui('language') }), seg(getLang(), [['fr', 'Français'], ['en', 'English']], setLang)),
       h('div', { className: 'ml-field' }, h('span', { textContent: ui('theme') }),
         seg(localStorage.getItem('ml:theme') || 'auto', [['auto', ui('auto')], ['light', ui('light')], ['dark', ui('dark')]], (v) => { applyTheme(v); renderDialog(); })),
+      ...feedbackFields(applyFb),
       h('h3', { textContent: ui('data') }),
       h('div', { className: 'ml-data ml-even' },
         btn(ui('exportSettings'), () => exportSettings()),
