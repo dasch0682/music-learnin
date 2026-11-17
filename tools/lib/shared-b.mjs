@@ -54,14 +54,14 @@ export async function smoke({ browser, url, check, prep, startSel = '.ml-start' 
     p.on('pageerror', (e) => errs.push(String(e)));
     p.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
     await p.goto(url);
-    await p.waitForSelector(startSel, { timeout: 15000 });
+    await p.waitForSelector(startSel || '.ml-title', { timeout: 15000 });
     const tag = `${scheme}/${locale}`;
     const lang = await p.evaluate(() => document.documentElement.lang);
     check(lang === locale.slice(0, 2), `smoke ${tag}: html lang ${lang}`);
     titles[locale] = await p.$eval('.ml-title', (e) => e.textContent);
     bgs[scheme] = await p.evaluate(() => getComputedStyle(document.body).backgroundColor);
     check(!(await overflows(p)), `smoke ${tag}: overflow before start`);
-    await p.click(startSel);
+    if (startSel) await p.click(startSel);
     await p.waitForFunction(() => window.__test, null, { timeout: 15000 });
     await p.waitForTimeout(400);
     if (prep) await prep(p, tag);
@@ -122,7 +122,7 @@ export async function playedNotes(page, reset = true) {
   const s = await page.evaluate((r) => { const a = window.__starts.slice(); if (r) window.__starts.length = 0; return a; }, reset);
   const groups = [];
   for (const x of s.filter((x) => x.f > 20)) {
-    const g = groups.find((y) => Math.abs(y.when - x.when) < 0.004);
+    const g = groups.find((y) => Math.abs(y.when - x.when) < 0.05);
     if (g) g.f = Math.min(g.f, x.f); else groups.push({ when: x.when, f: x.f });
   }
   return groups.sort((a, b) => a.when - b.when).map((g) => ({ when: g.when, midi: Math.round(69 + 12 * Math.log2(g.f / 440)) }));

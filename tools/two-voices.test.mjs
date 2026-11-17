@@ -1,6 +1,7 @@
 // Plays every level of Two voices: a wrong answer (twice at round 1), then the right one. Recomputes the music rules from the MIDI notes.
 // Usage: npx vite --port 5404 --strictPort &   then   PORT=5404 node tools/two-voices.test.mjs [screenshot-dir]
 import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { smoke, skillOf, setField, closeSettings, persistCheck, readAttempts, newAttempts, recordAudio, playedNotes, waitPlayed } from './lib/shared-b.mjs';
 const base = `http://localhost:${process.env.PORT || 5404}/two-voices/`;
 const dir = process.argv[2];
 const browser = await launch();
@@ -10,7 +11,7 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'two-voices').sort((x, y) => x.t - y.t)); }; }));
+const attempts = () => readAttempts(page, 'two-voices');
 const state = () => page.evaluate(() => window.__test.state());
 
 const pc = (m) => ((m % 12) + 12) % 12;
@@ -132,6 +133,8 @@ async function enter(v, list) { await select(v); for (const m of list) await pag
 async function settle() { await page.waitForFunction(() => { const t = window.__test.state(); return t.marks && (!t.locked || [...t.marks.top, ...t.marks.bottom].every(Boolean)); }); }
 const other = (s, v, not) => { const w = []; for (let m = s.ranges[v][0]; m <= s.ranges[v][1]; m++) if (NAT.includes(pc(m)) && m !== not) w.push(m); return w[(not * 7) % w.length]; };
 
+await smoke({ browser, url: base, check });
+await recordAudio(page);
 await page.goto(base);
 for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:two-voices', JSON.stringify({ level: l, tempo: 100 })), level);
@@ -159,6 +162,7 @@ for (const level of levels(6)) {
       check(st.marks.top.every((ok, i) => ok === (i !== s.n - 2)) && st.marks.bottom.every(Boolean), `L${level}: marks ${JSON.stringify(st.marks)}`);
       const colours = await page.$$eval('.tv-staff[data-voice="top"] .ml-note', (e) => e.map((g) => g.style.color));
       check(colours[colours.length - 1] === 'var(--bad)' && colours[1] === (s.n > 2 ? 'var(--good)' : colours[1]), `L${level}: colours ${JSON.stringify(colours)}`);
+      check(await page.$('.ml-stage.ml-bad'), `L${level}: no wrong-answer feedback on the stage`);
       if (dir && level === 4) await page.screenshot({ path: `${dir}/tv-4-wrong.png` });
       await enter('top', [T[s.n - 1]]);
     } else if (round === 1) { // wrong first bass note, twice
@@ -181,9 +185,9 @@ for (const level of levels(6)) {
     const fin = await state();
     check(fin.marks.top.every(Boolean) && fin.marks.bottom.every(Boolean) && fin.entered.top.join() === T.slice(1).join() && fin.entered.bottom.join() === B.slice(1).join(), `L${level} round ${round}: final ${JSON.stringify(fin.entered)}`);
     if (dir && round === 2 && level === 6) await page.screenshot({ path: `${dir}/tv-6-fr.png` });
-    await page.waitForTimeout(1800);
-    const mine = (await attempts()).slice(before);
-    check(mine.length === 1 && mine[0].ok === (round > 1) && mine[0].level === level && mine[0].item === s.item && mine[0].skill === 'listen.twovoices', `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.level, a.skill]))}`);
+    const mine = await newAttempts(page, 'two-voices', before);
+    await page.waitForFunction(() => { const t = window.__test.state(); return t.marks === null && !t.locked; }, null, { timeout: 8000 });
+    check(mine.length === 1 && mine[0].ok === (round > 1) && mine[0].level === level && mine[0].item === s.item && mine[0].skill === skillOf('two-voices', level), `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.level, a.skill]))}`);
   }
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   // Many generated questions: rules on all of them, at least two textures, every key of the level, G major thirds.
@@ -207,6 +211,21 @@ for (const level of levels(6)) {
   console.log(`L${level}`, [...seen].join(' '), [...lens].join(','), [...tags].join(','), JSON.stringify(byTex));
 }
 function n(s) { return s.n - 1; }
+// Playback = both voices as written (the bass timbre sounds an octave below its note), spaced by the tempo; the tempo is saved.
+await page.evaluate(() => localStorage.setItem('ml:settings:two-voices', JSON.stringify({ level: 3, tempo: 100 })));
+await page.reload();
+await page.click('.ml-start');
+{
+  let st = await state();
+  let p = await waitPlayed(page, 4);
+  const n0 = st.n;
+  const stNow = await state();
+  check(p.length >= stNow.n && p.slice(0, stNow.n).every((x, i) => x.midi === stNow.bottom[i] - 12), `playback ${JSON.stringify(p.map((x) => x.midi))} vs bass ${stNow.bottom}`);
+  check(Math.abs(p[1].when - p[0].when - 0.6) < 0.02, `tempo 100: spacing ${p[1].when - p[0].when}`);
+  await persistCheck({ page, url: base, slug: 'two-voices', fields: [[1, 'tempo', 50]], check });
+  p = await waitPlayed(page, 3);
+  check(p.length >= 2 && Math.abs(p[1].when - p[0].when - 1.2) < 0.02, `tempo 50 after reload: spacing ${p.length > 1 && p[1].when - p[0].when}`);
+}
 // Undo, then next-level button after a clean streak.
 await page.evaluate(() => localStorage.setItem('ml:settings:two-voices', JSON.stringify({ level: 2, tempo: 100 })));
 await page.reload();
@@ -222,7 +241,7 @@ for (let i = 0; i < 6; i++) {
   s = await state();
   await enter('top', s.top.slice(1));
   await enter('bottom', s.bottom.slice(1));
-  await page.waitForTimeout(2700);
+  await page.waitForFunction(() => { const t = window.__test.state(); return t.marks === null && !t.locked && !t.entered.top.length; }, null, { timeout: 10000 });
 }
 check(await page.$eval('.tv-next', (e) => e.classList.contains('tv-show')), 'next-level button after a clean streak');
 await page.click('.tv-next');

@@ -2,6 +2,7 @@
 // Expected hits are recomputed from the item id. Also checks the F/J keys, late taps, and the "next level" button.
 // Usage: npx vite --port 5304 --strictPort &   then   PORT=5304 node tools/two-hands.test.mjs [screenshot-dir]
 import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { smoke, skillOf, setField, closeSettings, persistCheck, readAttempts } from './lib/shared-b.mjs';
 const base = `http://localhost:${process.env.PORT || 5304}/two-hands/`;
 const dir = process.argv[2];
 const browser = await launch({ speed: 1 }); // taps are timed against the real clock
@@ -11,9 +12,9 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const TEMPO = 120;
+let TEMPO = 120;
 const state = () => page.evaluate(() => ({ ...window.__test }));
-const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'two-hands').sort((x, y) => x.t - y.t)); }; }));
+const attempts = () => readAttempts(page, 'two-hands');
 
 /** Expected hits in ms from the start of the turn, from the item id alone. */
 function expectedFor(s) {
@@ -67,13 +68,15 @@ async function load(level, extra = {}) {
 }
 const overflow = () => page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
 
+const ITEMS = { 1: ['alt', 'alt-r'], 2: ['2:1'], 4: ['3:2'], 5: ['2:3', '4:3'], 6: ['3:4', '5:4', '3:2:fast'] };
+await smoke({ browser, url: base, check });
 await page.goto(base);
 for (const level of levels(6)) {
   await load(level);
   const before = (await attempts()).length;
   let s = await state();
   const item = s.item;
-  check(s.level === level && s.skill === 'rhythm.poly', `L${level}: skill/level ${s.skill} ${s.level}`);
+  check(s.level === level && s.skill === skillOf('two-hands', level), `L${level}: skill/level ${s.skill} ${s.level}`);
   const ex = expectedFor(s);
   check(s.bpm === ex.bpm && near(s.expected.L, ex.L) && near(s.expected.R, ex.R), `L${level} ${item}: expected ${JSON.stringify(s.expected)} vs ${JSON.stringify(ex)}`);
   if ([1, 2, 4].includes(level)) check(s.demo, `L${level}: model not played first`);
@@ -89,10 +92,70 @@ for (const level of levels(6)) {
   await page.waitForTimeout(300);
   const mine = (await attempts()).slice(before);
   check(mine.length === 2 && !mine[0].ok && mine[1].ok, `L${level}: attempts ${JSON.stringify(mine.map((a) => a.ok))}`);
-  check(mine.every((a) => a.level === level && a.skill === 'rhythm.poly' && a.item === item), `L${level}: bad skill/level/item ${JSON.stringify(mine.map((a) => [a.skill, a.level, a.item]))}`);
+  check(mine.every((a) => a.level === level && a.skill === skillOf('two-hands', level) && a.item === item), `L${level}: bad skill/level/item ${JSON.stringify(mine.map((a) => [a.skill, a.level, a.item]))}`);
+  // Many more generated patterns (a tempo change draws a new one without playing): the expected hits follow from the item.
+  const seen = new Set();
+  for (let k = 0; k < rounds(30, 5); k++) {
+    TEMPO = 120 - (k % 2) * 2;
+    await page.evaluate(() => document.querySelector('.th-view > *')?.setAttribute('data-old', '1')); // a new challenge redraws the lanes
+    await setField(page, 1, TEMPO);
+    await page.waitForFunction(() => !document.querySelector('.th-view [data-old], .th-view[data-old]') && window.__test.phase === 'idle', null, { timeout: 8000 }).catch(() => check(false, `L${level}: no new pattern after a settings change`));
+    const t = await state();
+    const e = expectedFor(t);
+    check(t.bpm === e.bpm && near(t.expected.L, e.L) && near(t.expected.R, e.R), `L${level}~${k} ${t.item}: expected ${JSON.stringify(t.expected)} vs ${JSON.stringify(e)}`);
+    check(level === 3 ? /^beat\+(q|ee)-(q|ee)-(q|ee)-q$/.test(t.item) && t.beats === 4 : ITEMS[level].includes(t.item), `L${level}: item ${t.item}`);
+    check(t.expected.L.length > 0 && t.expected.R.length > 0 && t.expected.L.every((x, i) => i === 0 || x > t.expected.L[i - 1]) && t.expected.R.every((x, i) => i === 0 || x > t.expected.R[i - 1]), `L${level} ${t.item}: onsets not ordered`);
+    check(t.len > 0 && t.expected.L.at(-1) < t.len && t.expected.R.at(-1) < t.len, `L${level} ${t.item}: hit after the end of the turn`);
+    seen.add(t.item);
+  }
+  await closeSettings(page);
+  TEMPO = 120;
+  if (!FAST) check(seen.size >= (level === 3 ? 6 : ITEMS[level].length), `L${level}: only ${[...seen]} after sampling`);
   check(!(await overflow()), `L${level}: overflow`);
   console.log(`L${level}`, mine.map((a) => `${a.skill} ${a.item} ${a.ok}`).join(' | '));
 }
+
+// Tap timing tolerance: early or late inside the tolerance is right, outside it is wrong (both hands shifted).
+for (const level of rounds([3, 5, 6], [3])) {
+  await load(level);
+  await tapPad();
+  let s = await state();
+  const t = s.tol;
+  for (const [label, shift, ok] of [['early inside', -Math.round(0.65 * t), true], ['late inside', Math.round(0.65 * t), true], ['late outside', Math.round(1.7 * t), false], ['early outside', -Math.round(1.7 * t), false]]) {
+    const r = await playRun(null, { lateMs: shift });
+    check(r.correct === ok, `L${level}: all taps ${label} (${shift} ms, tolerance ${t} ms) judged ${JSON.stringify(r)}`);
+    await page.waitForFunction(() => { const x = window.__test; return x.phase === 'idle' || (x.phase === 'feedback' && !x.result.correct); }, null, { timeout: 8000 });
+    await page.waitForTimeout(800);
+    await tapPad();
+    await page.waitForFunction(() => window.__test.turnStart != null || window.__test.phase === 'count', null, { timeout: 8000 });
+  }
+}
+// Silence is not an answer: a run without a single tap logs nothing.
+await load(3);
+{
+  const before = (await attempts()).length;
+  await tapPad();
+  await page.waitForFunction(() => window.__test.phase === 'count' || window.__test.phase === 'turn', null, { timeout: 5000 });
+  await page.waitForFunction(() => window.__test.phase === 'idle' && window.__test.result?.run !== undefined, null, { timeout: 20000 }).catch(() => {});
+  await page.waitForTimeout(500);
+  check((await attempts()).length === before, 'a run with no tap was logged');
+}
+// Settings: tempo, tolerance and latency take effect, are saved and survive a reload; the latency is compensated.
+await load(3);
+TEMPO = 80;
+await persistCheck({
+  page, url: base, slug: 'two-hands', fields: [[1, 'tempo', 80], [2, 'tolerance', 'strict'], [3, 'latency', 40]], check,
+  applied: async (pg) => {
+    const t = await pg.evaluate(() => ({ ...window.__test }));
+    return t.bpm !== 80 ? `bpm ${t.bpm}` : t.tol > Math.round(0.07 * Math.min(1.2, Math.max(0.8, Math.sqrt(72 / 80))) * 1000) + 1 ? `tol ${t.tol}` : '';
+  },
+});
+await tapPad();
+{
+  const r = await playRun(null); // turnStart already holds the latency: on time once compensated
+  check(r.correct, `latency 40: run judged ${JSON.stringify(r)}`);
+}
+TEMPO = 120;
 
 // Late taps (more than the window) fail; the hands are judged apart (right hand only wrong here would need a swap, so all late).
 await load(3, { tolerance: 'strict' });
