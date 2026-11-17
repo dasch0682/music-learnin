@@ -12,7 +12,7 @@ const MAX_LEVEL = 8;
 const skillOf = (level) => (level <= 5 ? 'theory.harmony' : 'theory.jazz');
 const game = createGame({
   id: 'harmony-lab',
-  title: L('Harmony lab', 'Atelier d’harmonie'),
+  title: L('Assemble the chords', 'Assemble les accords'),
   strings: {
     replay: L('Listen again', 'Réécouter'),
     ok: L('Check', 'Valider'),

@@ -9,7 +9,7 @@ import './style.css';
 const L = (en, fr) => ({ en, fr });
 const game = createGame({
   id: 'sing-match',
-  title: L('Sing it', 'Chante-la'),
+  title: L('Sing the note', 'Chante la note'),
   strings: {
     noMic: L('The microphone is not available. Allow it, then try again.', 'Le micro n’est pas disponible. Autorise-le, puis réessaie.'),
     retry: L('Try again', 'Réessayer'),

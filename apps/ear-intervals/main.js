@@ -9,7 +9,7 @@ import './style.css';
 const L = (en, fr) => ({ en, fr });
 const game = createGame({
   id: 'ear-intervals',
-  title: L('Intervals by ear', 'Intervalles à l’oreille'),
+  title: L('Guess the interval', 'Devine l’intervalle'),
   strings: {
     find: L('Find the second note', 'Trouve la deuxième note'),
     findTop: L('Find the top note', 'Trouve la note du haut'),

@@ -10,7 +10,7 @@ const L = (en, fr) => ({ en, fr });
 const MAX_LEVEL = 6;
 const game = createGame({
   id: 'ear-cadences',
-  title: L('Cadences by ear', 'Cadences à l’oreille'),
+  title: L('Guess the ending', 'Devine la fin'),
   strings: {
     replay: L('Listen again', 'Réécouter'),
     settled: L('Settled', 'Posé'),

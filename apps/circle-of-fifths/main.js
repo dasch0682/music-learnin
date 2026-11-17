@@ -12,7 +12,7 @@ const MAX_LEVEL = 6;
 const SKILL = 'theory.keys';
 const game = createGame({
   id: 'circle-of-fifths',
-  title: L('Circle of fifths', 'Cycle des quintes'),
+  title: L('Place the keys', 'Place les tonalités'),
   strings: {
     replay: L('Listen again', 'Réécouter'),
     tapNext: L('Tap the next one', 'Touche la suivante'),

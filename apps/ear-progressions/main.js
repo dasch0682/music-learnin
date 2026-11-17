@@ -9,7 +9,7 @@ const L = (en, fr) => ({ en, fr });
 const MAX_LEVEL = 6, SKILL = 'listen.progressions', CLEAN = 6;
 const game = createGame({
   id: 'ear-progressions',
-  title: L('Chord paths', 'Suites d’accords'),
+  title: L('Find the chords', 'Retrouve les accords'),
   strings: {
     replay: L('Listen again', 'Réécouter'),
     undo: L('Undo', 'Annuler'),

@@ -8,7 +8,7 @@ import './style.css';
 const L = (en, fr) => ({ en, fr });
 const game = createGame({
   id: 'ear-chords',
-  title: L('Chords by ear', 'Accords à l’oreille'),
+  title: L('Guess the chord', 'Devine l’accord'),
   strings: {
     replay: L('Listen again', 'Réécouter'),
     arpeggio: L('Note by note', 'Note par note'),

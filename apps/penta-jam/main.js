@@ -10,7 +10,7 @@ import './style.css';
 const L = (en, fr) => ({ en, fr });
 const game = createGame({
   id: 'penta-jam',
-  title: L('Five-note jam', 'Impro cinq notes'),
+  title: L('Play with 5 notes', 'Joue avec 5 notes'),
   strings: {
     h1: L('Play! Every note sounds good.', 'Joue ! Toutes les notes sonnent bien.'),
     listen: L('Listen…', 'Écoute…'),

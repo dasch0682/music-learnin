@@ -137,6 +137,7 @@ for (let level = 1; level <= 6; level++) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:two-voices', JSON.stringify({ level: l, tempo: 100 })), level);
   await page.reload();
   await page.click('.ml-start');
+  await page.waitForFunction(() => window.__test.state().texture);
   await page.waitForTimeout(300);
   const seen = new Set(), lens = new Set(), tags = new Set();
   for (let round = 0; round < ROUNDS[level]; round++) {
@@ -210,6 +211,7 @@ function n(s) { return s.n - 1; }
 await page.evaluate(() => localStorage.setItem('ml:settings:two-voices', JSON.stringify({ level: 2, tempo: 100 })));
 await page.reload();
 await page.click('.ml-start');
+await page.waitForFunction(() => window.__test.state().texture);
 await page.waitForTimeout(300);
 let s = await state();
 await enter('top', [s.top[1]]);
@@ -232,6 +234,7 @@ await en.goto(base);
 await en.evaluate(() => localStorage.setItem('ml:settings:two-voices', JSON.stringify({ level: 3, tempo: 100 })));
 await en.reload();
 await en.click('.ml-start');
+await en.waitForFunction(() => window.__test.state().texture);
 await en.waitForTimeout(400);
 const es = await en.evaluate(() => window.__test.state());
 await en.click('.tv-staff[data-voice="top"]');

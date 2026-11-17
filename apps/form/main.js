@@ -11,7 +11,7 @@ const MAX_LEVEL = 6;
 const SKILL = 'listen.form';
 const game = createGame({
   id: 'form',
-  title: L('Phrases and form', 'Phrases et forme'),
+  title: L('Spot the phrases', 'Repère les phrases'),
   strings: {
     replay: L('Listen again', 'Réécouter'),
     same: L('Same', 'Pareil'),

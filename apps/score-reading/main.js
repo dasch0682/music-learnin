@@ -10,7 +10,7 @@ import './style.css';
 const L = (en, fr) => ({ en, fr });
 const game = createGame({
   id: 'score-reading',
-  title: L('Transpose', 'Transpose'),
+  title: L('Change the key', 'Change de tonalité'),
   strings: {
     inst: L('in {n}', 'en {n}'),
     gap1: L('a whole tone lower', 'un ton plus bas'),

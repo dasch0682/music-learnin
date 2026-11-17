@@ -9,7 +9,7 @@ import './style.css';
 const L = (en, fr) => ({ en, fr });
 const game = createGame({
   id: 'echo-penta',
-  title: L('Echo', 'Écho'),
+  title: L('Repeat the tune', 'Répète l’air'),
   strings: {
     replay: L('Listen again', 'Réécouter'),
     nextLevel: L('Level {n} →', 'Niveau {n} →'),

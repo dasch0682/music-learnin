@@ -9,7 +9,7 @@ import './style.css';
 const L = (en, fr) => ({ en, fr });
 const game = createGame({
   id: 'two-hands',
-  title: L('Two hands', 'Deux mains'),
+  title: L('Tap with two hands', 'Frappe à deux mains'),
   strings: {
     left: L('Left hand', 'Main gauche'),
     right: L('Right hand', 'Main droite'),

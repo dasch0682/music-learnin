@@ -9,7 +9,7 @@ const L = (en, fr) => ({ en, fr });
 const MAX_LEVEL = 6, SKILL = 'listen.scales', CLEAN = 8;
 const game = createGame({
   id: 'ear-scales',
-  title: L('Scales by ear', 'Gammes à l’oreille'),
+  title: L('Guess the scale', 'Devine la gamme'),
   strings: {
     replay: L('Listen again', 'Réécouter'),
     bright: L('Bright', 'Clair'),

@@ -9,7 +9,7 @@ const L = (en, fr) => ({ en, fr });
 const MAX_LEVEL = 6, SKILL = 'listen.jazz', CLEAN = 8;
 const game = createGame({
   id: 'ear-jazz',
-  title: L('Jazz colours', 'Couleurs jazz'),
+  title: L('Guess the jazz chord', 'Devine l’accord jazz'),
   strings: {
     replay: L('Listen again', 'Réécouter'),
     arpeggio: L('Note by note', 'Note par note'),

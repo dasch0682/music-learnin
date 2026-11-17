@@ -10,7 +10,7 @@ import './style.css';
 const L = (en, fr) => ({ en, fr });
 const game = createGame({
   id: 'key-signatures',
-  title: L('Key signatures', 'Armures'),
+  title: L('Sharps and flats', 'Dièses et bémols'),
   strings: {
     nextLevel: L('Next level →', 'Niveau suivant →'),
   },
