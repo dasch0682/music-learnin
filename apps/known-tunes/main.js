@@ -167,7 +167,7 @@ async function onKey(midi) {
     const lv = levelNow();
     await log(true);
     if (g !== gen) return;
-    if (streak === STREAK && lv < 6) game.say(game.t('levelUp'));
+    if (streak === STREAK && lv < 6) game.celebrate(game.t('levelUp'));
     const lastPhrase = lv <= 2 || phraseIdx === tune.phrases.length - 1;
     if (lastPhrase && lv <= 2) { nameShown = true; }
     renderTexts();
