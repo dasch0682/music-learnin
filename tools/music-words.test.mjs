@@ -113,8 +113,9 @@ for (const level of levels(6)) {
   for (const item of items) for (const mode of level === 4 ? ['sw', 'ws'] : level === 6 ? ['hear', 'see'] : [undefined]) {
     for (let k = 0; k < rounds(item === 'order' ? 3 : 2, 1); k++) {
       await page.evaluate(([i, m]) => window.__test.force(i, m), [item, mode]);
+      await page.evaluate(() => document.querySelector('.mw-choices button')?.setAttribute('data-old', '1')); // a new question redraws the buttons
       await setField(page, 0, level);
-      await page.waitForFunction((it) => window.__test.state().item === it, item, { timeout: 5000 });
+      await page.waitForFunction((it) => window.__test.state().item === it && !document.querySelector('.mw-choices button[data-old]'), item, { timeout: 5000 });
       const t = await page.evaluate(() => window.__test.state());
       verify(level, t);
       if (level === 6 && ['accent', 'fermata', 'staccato', 'legato'].includes(item)) check(t.mode === mode, `L6 ${item}: mode ${t.mode} vs ${mode}`);

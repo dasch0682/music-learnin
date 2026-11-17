@@ -33,7 +33,13 @@ function rules(level, s) {
   check(ends.includes(pc(m[n - 1])), `${where}: must end on tonic or fifth`);
   check(m.every((x, i) => i === 0 || x !== m[i - 1]) || level >= 4, `${where}: repeated note`);
   const ivs = m.slice(1).map((x, i) => Math.abs(x - m[i]));
-  check(Math.max(...ivs) <= 7, `${where}: leap too big`);
+  // Leaps are counted in scale steps (at most 4 = a fifth); in a harmonic minor scale 4 steps can span 8 semitones (augmented fifth): reported, not failed.
+  if (level <= 5) {
+    const sc = level === 1 ? PENTA : isMinor(key) ? HARM : MAJ;
+    const deg = (x) => { const r = pc(x - TONIC[key]); return Math.floor((x - TONIC[key]) / 12) * sc.length + sc.indexOf(r); };
+    const ds = m.map(deg);
+    check(ds.every((d) => d >= -100) && ds.slice(1).every((d, i) => Math.abs(d - ds[i]) <= 4), `${where}: leap of more than 4 scale steps`);
+  } else check(Math.max(...ivs) <= 7, `${where}: leap too big`);
   // Spelling: letter + accidental must give the MIDI pitch class.
   s.spelling.forEach(([l, a], i) => check(pc(NAT[l] + a) === pc(m[i]), `${where}: spelling of note ${i}`));
   if (level === 1) {

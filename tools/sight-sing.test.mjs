@@ -2,6 +2,7 @@
 // Also checks the written melodies against music theory (key, intervals, accidentals) and the voice setting.
 // Usage: npx vite --port 5309 --strictPort &   then   PORT=5309 node tools/sight-sing.test.mjs [screenshot-dir]
 import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { smoke, skillOf, setField, closeSettings, persistCheck } from './lib/shared-b.mjs';
 const base = `http://localhost:${process.env.PORT || 5309}/sight-sing/`;
 const dir = process.argv[2];
 const browser = await launch({ speed: 1 }); // microphone test: pitches are fed in real time (accelerated timers made it hang when run next to other microphone tests)
@@ -67,6 +68,7 @@ function theory(s, level, voice) {
   }
 }
 
+await smoke({ browser, url: base, check });
 await page.goto(base);
 for (const level of levels(6)) {
   await setup(level);
@@ -86,6 +88,10 @@ for (const level of levels(6)) {
   const staff = await page.evaluate(() => ({ notes: document.querySelectorAll('.ml-note').length, sig: document.querySelectorAll('.ml-keysig').length, clef: document.querySelectorAll('.ml-clef').length }));
   check(staff.notes === s.notes.length && staff.sig === Math.abs(s.keySig) && staff.clef === 1, `L${level}: staff drawing ${JSON.stringify(staff)}`);
   if (dir && [3, 6].includes(level)) await page.screenshot({ path: `${dir}/ss-${level}.png` });
+  // Silence is not an answer, not even a wrong one.
+  await feed(null, 2600);
+  s = await state();
+  check(!s.wrongLogged && s.idx === 0 && (await attempts()).length === before, `L${level}: silence counted as an answer`);
   // 1. A steady wrong note counts once and restarts from the first note.
   let wrongNote = s.notes[0].midi + 1;
   while (Math.abs(mod(wrongNote - s.notes[0].midi + 6, 12) - 6) < 1.2) wrongNote++;
@@ -104,7 +110,7 @@ for (const level of levels(6)) {
   await feed(null, 800);
   const mine = (await attempts()).slice(before);
   check(mine.length === 2 && !mine[0].ok && mine[1].ok, `L${level}: attempts ${JSON.stringify(mine.map((a) => a.ok))}`);
-  check(mine.every((a) => a.level === level && a.skill === 'sing.sight' && a.item === item), `L${level}: bad skill, level or item`);
+  check(mine.every((a) => a.level === level && a.skill === skillOf('sight-sing', level) && a.item === item), `L${level}: bad skill, level or item`);
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   console.log(`L${level}`, mine.map((a) => `${a.skill} ${a.item} ${a.ok}`).join(' | '));
   // 3. Sample other melodies of the level (Skip logs a miss and draws the next one).
@@ -127,6 +133,44 @@ for (const voice of rounds(["low", "medium", "high"], ["low"])) {
   }
   if (dir && voice === 'low') await page.screenshot({ path: `${dir}/ss-low.png` });
   console.log('voice', voice, (await state()).clef);
+}
+// Settings: voice and accuracy are saved, applied after a reload, and change the behaviour.
+await setup(3, 'child');
+await persistCheck({
+  page, url: base, slug: 'sight-sing', fields: [[1, 'voice', 'low'], [2, 'tolerance', 30]], check,
+  applied: async (pg) => {
+    for (let i = 0; i < 50; i++) { if ((await pg.evaluate(() => window.__test.state().notes))) break; await pg.waitForTimeout(100); }
+    const t = await pg.evaluate(() => window.__test.state());
+    const m = t.notes.map((x) => x.midi), mid = (Math.min(...m) + Math.max(...m)) / 2;
+    return Math.abs(mid - (43 + 57) / 2) <= 6 ? '' : `melody centre ${mid} for the low voice`;
+  },
+});
+{
+  let s = await listening();
+  await feed(s.notes[0].midi + 0.45, 1500); // Precise (30): 0.45 semitone off is out of tune
+  check((await state()).idx === 0, 'precise tolerance accepted a note 0.45 semitone off');
+  await feed(null, 400);
+  await setField(page, 2, 65);
+  await closeSettings(page);
+  s = await listening();
+  await feed(s.notes[0].midi + 0.45, 1000); // Easy (65): in tune
+  await page.waitForFunction(() => window.__test.state().idx >= 1, null, { timeout: 4000 }).catch(() => check(false, 'easy tolerance rejected a note 0.45 semitone off'));
+}
+if (!FAST) { // a clean streak of 6 melodies offers the next level (full only: six complete real-time melodies take about a minute)
+  await setup(1, 'child');
+  for (let k = 0; k < 6; k++) {
+    const n0 = (await attempts()).length;
+    const first = await listening();
+    for (let i = 0; i < first.notes.length; i++) {
+      const cur = await listening();
+      await feed(cur.notes[i].midi + 0.1, 800);
+      await feed(null, 400);
+    }
+    for (let w = 0; w < 100 && (await attempts()).length === n0; w++) await feed(null, 100);
+  }
+  await page.waitForFunction(() => document.querySelector('.ss-offer:not(.ss-off)'), null, { timeout: 8000 }).catch(() => check(false, 'next-level button not offered after 6 clean melodies'));
+  await page.click('.ss-offer').catch(() => {});
+  await page.waitForFunction(() => window.__test.state().level === 2, null, { timeout: 5000 }).catch(() => check(false, 'next-level click did not reach level 2'));
 }
 // Refused microphone: message and retry.
 const ctx2 = await browser.newContext({ viewport: { width: 390, height: 780 }, locale: 'en-US', colorScheme: 'light' });
