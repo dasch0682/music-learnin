@@ -9,6 +9,7 @@ import './style.css';
 const L = (en, fr) => ({ en, fr });
 const game = createGame({
   id: 'sing-match',
+  quiet: (ms) => sound(ms), // the shell tells us when it makes a sound: the microphone stays shut
   title: L('Sing the note', 'Chante la note'),
   strings: {
     noMic: L('The microphone is not available. Allow it, then try again.', 'Le micro n’est pas disponible. Autorise-le, puis réessaie.'),
@@ -267,7 +268,6 @@ async function present(my = gen) {
 }
 
 async function log(r, correct) {
-  sound(450); // feedback sound
   await game.attempt({ skill: r.skill, correct, ms: Math.round(performance.now() - r.t0), level: r.level, item: r.item });
 }
 
@@ -296,7 +296,7 @@ async function miss() {
   resetTrack();
   draw(null);
   streak = 0;
-  if (r.wrongLogged) { sound(450); game.flash(false); }
+  if (r.wrongLogged) game.flash(false);
   else { r.wrongLogged = true; await log(r, false); }
   await wait(600);
   if (my === gen) present(my);

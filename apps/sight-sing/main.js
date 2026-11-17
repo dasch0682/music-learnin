@@ -12,6 +12,7 @@ const L = (en, fr) => ({ en, fr });
 const MAX_LEVEL = 6;
 const game = createGame({
   id: 'sight-sing',
+  quiet: (ms) => sound(ms), // the shell tells us when it makes a sound: the microphone stays shut
   title: L('Sing the score', 'Chante la partition'),
   strings: {
     noMic: L('The microphone is not available. Allow it, then try again.', 'Le micro n’est pas disponible. Autorise-le, puis réessaie.'),
@@ -331,8 +332,8 @@ async function miss() {
   draw(null);
   streak = 0;
   render();
-  if (r.wrongLogged) { sound(450); game.flash(false); }
-  else { r.wrongLogged = true; sound(450); await log(r, false); }
+  if (r.wrongLogged) game.flash(false);
+  else { r.wrongLogged = true; await log(r, false); }
   await wait(700);
   if (my === gen) present(my);
 }

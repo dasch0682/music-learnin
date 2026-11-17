@@ -271,7 +271,7 @@ async function finish() {
     if (streak >= STREAK && ch.level < MAX_LEVEL && levelBtn.hidden) {
       levelBtn.hidden = false;
       labels(); layout();
-      game.say(game.t('levelUp'));
+      game.celebrate(game.t('levelUp'));
     }
     pending = setTimeout(() => newChallenge(auto()), 1300);
   } else {

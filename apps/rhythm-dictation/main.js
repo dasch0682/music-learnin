@@ -152,7 +152,7 @@ async function check() {
       streak++;
       if (streak >= CLEAN) {
         if (q.level < MAX_LEVEL) nextBtn.classList.add('rd-show');
-        else if (streak === CLEAN) game.say(game.t('top'));
+        else if (streak === CLEAN) game.celebrate(game.t('top'));
       }
       await game.attempt(rec);
     }

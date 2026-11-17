@@ -52,7 +52,7 @@ function pool(level) {
 }
 const itemOf = (q) => `${q.clef}:${noteName(q.midi, { pref: q.pref, octave: true })}`;
 
-let current = null, started = 0, streak = 0, last = null, locked = false;
+let current = null, started = 0, streak = 0, last = null, locked = false, misses = 0;
 const staffBox = game.h('div', { style: 'width:100%' });
 const choices = game.h('div', { className: 'ml-choices' });
 game.stage.append(staffBox, choices);
@@ -66,6 +66,7 @@ async function next() {
   current = pickWeak(questions, stats, { keyOf: itemOf, avoid: last });
   last = itemOf(current);
   locked = false;
+  misses = 0;
   renderStaff(staffBox, { clef: current.clef, notes: [{ midi: current.midi, pref: current.pref }], width: 260 });
   renderChoices();
   started = performance.now();
@@ -86,6 +87,7 @@ function renderChoices() {
   }
   choices.replaceChildren(...options.map((o) => {
     const b = game.h('button', { className: 'ml-btn', textContent: o.text });
+    if (o.ok) b.dataset.ok = '1';
     b.onclick = () => answer(o, b);
     return b;
   }));
@@ -97,7 +99,12 @@ async function answer(option, button) {
   if (game.settings.sound) playNote(current.midi, { dur: 0.5 });
   button.classList.add(option.ok ? 'ml-right' : 'ml-wrong');
   await game.attempt({ skill: current.skill, correct: option.ok, ms, level: +game.settings.level, item: itemOf(current), silent: game.settings.sound });
-  if (!option.ok) { streak = 0; button.disabled = true; return; } // try again on the same note
+  if (!option.ok) { // try again
+    streak = 0;
+    button.disabled = true;
+    if (++misses === 2) choices.querySelector('[data-ok]')?.classList.add('ml-reveal'); // 2nd miss: show the answer
+    return;
+  } // same note on the same note
   locked = true;
   streak++;
   if (streak === 20) game.celebrate(game.t('levelUp'));

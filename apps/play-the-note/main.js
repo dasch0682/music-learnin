@@ -11,6 +11,7 @@ import './style.css';
 const L = (en, fr) => ({ en, fr });
 const game = createGame({
   id: 'play-the-note',
+  quiet: (ms) => sound(ms), // the shell tells us when it makes a sound: the microphone stays shut
   title: L('Play the note', 'Joue la note'),
   strings: {
     noMic: L('The microphone is not available. Use the keyboard, or allow it and try again.', 'Le micro n’est pas disponible. Joue sur le clavier, ou autorise-le puis réessaie.'),
@@ -148,7 +149,6 @@ async function right(keyMidi) {
   const viaMic = keyMidi == null;
   const hearIt = !!game.settings.hear;
   if (viaMic && hearIt) { playNote(current.midi + (TRANSPOSE[game.settings.instrument] || 0), { dur: 0.5 }); sound(750); }
-  else if (!hearIt) sound(450);
   await game.attempt({ skill: SKILL, correct: true, ms: Math.round(performance.now() - t0), level: +game.settings.level, item: itemOf(current), silent: hearIt });
   setTimeout(() => { if (my === gen) next(); }, viaMic && hearIt ? 800 : 500);
 }
@@ -159,7 +159,6 @@ async function wrongAnswer(keyMidi) {
   streak = 0;
   kb?.flash(keyMidi, 'ml-bad', 400);
   const silent = keyMidi != null && !!game.settings.hear; // the key already made its sound
-  if (!silent) sound(450);
   if (wrongLogged) return game.flash(false, { silent });
   wrongLogged = true;
   offerBtn.classList.add('pn-off');

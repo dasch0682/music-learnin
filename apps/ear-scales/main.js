@@ -158,7 +158,7 @@ async function answer(type, button) {
     button.disabled = true;
     streak = 0;
     nextBtn.classList.remove('sc-show');
-    if (missed) game.flash(false);
+    if (missed) { choices.querySelector(`[data-type="${q.item}"]`)?.classList.add('ml-reveal'); game.flash(false); } // 2nd miss: show the answer
     else { missed = true; await game.attempt(rec); }
     // Compare: the scale that was chosen, then the question again, both going up from the same tonic.
     const cur = q;

@@ -156,7 +156,7 @@ async function answer(type, button) {
     button.disabled = true;
     streak = 0;
     nextBtn.classList.remove('jz-show');
-    if (missed) game.flash(false);
+    if (missed) { choices.querySelector(`[data-type="${q.answer}"]`)?.classList.add('ml-reveal'); game.flash(false); } // 2nd miss: show the answer
     else { missed = true; await game.attempt(rec); }
     const cur = q;
     timer = setTimeout(() => {

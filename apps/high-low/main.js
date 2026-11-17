@@ -150,7 +150,7 @@ async function answer(value, button) {
     button.disabled = true;
     streak = 0;
     nextBtn.classList.remove('hl-show');
-    if (missed) game.flash(false);
+    if (missed) { answers.querySelector(`[data-value="${q.answer}"]`)?.classList.add('ml-reveal'); game.flash(false); } // 2nd miss: show the answer
     else { missed = true; await game.attempt(rec); }
     timer = setTimeout(() => play(), 650); // hear it again, then retry
   }

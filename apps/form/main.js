@@ -290,7 +290,7 @@ async function answer(id, button) {
     nextBtn.classList.remove('fm-show');
     if (fill) { button.classList.add('ml-wrong'); setTimeout(() => button.classList.remove('ml-wrong'), 450); }
     else { button.classList.add('ml-wrong'); button.disabled = true; }
-    if (missed) game.flash(false);
+    if (missed) { (fill ? pal : choices).querySelector(`[data-id="${fill ? q.seq[q.pos] : q.answer}"]`)?.classList.add('ml-reveal'); game.flash(false); } // 2nd miss: show the answer
     else { missed = true; await game.attempt(rec); }
     timer = setTimeout(() => { quietUntil = 0; fill ? playOne(q.pos) : play(); }, 700);
   }

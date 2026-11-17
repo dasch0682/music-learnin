@@ -221,7 +221,7 @@ async function answer(id, button) {
     button.disabled = true;
     streak = 0;
     nextBtn.classList.remove('rc-show');
-    if (missed) game.flash(false, { silent: sound });
+    if (missed) { choices.querySelector(`[data-id="${q.answer}"]`)?.classList.add('ml-reveal'); game.flash(false, { silent: sound }); } // 2nd miss: show the answer
     else { missed = true; await game.attempt(rec); }
   }
 }

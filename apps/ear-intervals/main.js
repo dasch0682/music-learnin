@@ -149,7 +149,10 @@ async function answer(ok, given, button) {
     if (button) { button.classList.add('ml-wrong'); button.disabled = true; } else kb.flash(given, 'ml-bad', 500);
     streak = 0;
     nextBtn.classList.remove('ei-show');
-    if (missed) game.flash(false, { silent: byKeys });
+    if (missed) { // 2nd miss: show the answer
+      if (byKeys) kb.flash(q.second, 'ml-hint', 3000); else names.children[q.ids.indexOf(q.id)]?.classList.add('ml-reveal');
+      game.flash(false, { silent: byKeys });
+    }
     else { missed = true; await game.attempt(rec); }
     timer = setTimeout(play, byKeys ? 900 : 650); // hear it again, then retry
   }

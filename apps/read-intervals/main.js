@@ -202,7 +202,7 @@ async function answer(id, button) {
       streak++;
       if (streak >= 8) {
         if (q.level < MAX_LEVEL) nextBtn.classList.add('ri-show');
-        else if (streak === 8) game.say(game.t('top'));
+        else if (streak === 8) game.celebrate(game.t('top'));
       }
       await game.attempt(rec);
     }
@@ -213,7 +213,7 @@ async function answer(id, button) {
     button.disabled = true;
     streak = 0;
     nextBtn.classList.remove('ri-show');
-    if (missed) game.flash(false, { silent: sound });
+    if (missed) { choices.querySelector(`[data-id="${q.item}"]`)?.classList.add('ml-reveal'); game.flash(false, { silent: sound }); } // 2nd miss: show the answer
     else { missed = true; await game.attempt(rec); }
   }
 }

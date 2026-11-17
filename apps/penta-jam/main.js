@@ -484,7 +484,7 @@ function judge(spec) {
   }
   const rec = { skill: lv.skill, correct: r.ok, ms: Math.round((spec.end - spec.start) * st.spb * 1000), level: st.level, item: spec.item, detail: r.detail };
   st.results.push(rec);
-  game.attempt({ ...rec, silent: true }).then(() => { if (lv.skill === 'play.tension') loadItemMastery(lv.skill).then((m) => { st.stats = m; }); }).catch(() => {});
+  game.attempt({ ...rec, silent: true, haptic: false }).then(() => { if (lv.skill === 'play.tension') loadItemMastery(lv.skill).then((m) => { st.stats = m; }); }).catch(() => {});
   lv.after?.(spec, r);
   st.recent = [...st.recent, r.ok].slice(-6);
   if (!st.canLevelUp && st.level < MAX_LEVEL && st.recent.length >= 5 && st.recent.filter(Boolean).length >= 5) {

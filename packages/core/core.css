@@ -92,7 +92,7 @@ body.ml-game { display: flex; flex-direction: column; min-height: 100dvh; }
   content: "✓"; position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; border-radius: 50%;
   background: var(--bg); color: var(--good); font-size: 12px; font-weight: 700; line-height: 18px; text-align: center; text-decoration: none;
 }
-.ml-btn.ml-reveal { outline: 3px dashed var(--good); outline-offset: 2px; }
+.ml-reveal { outline: 3px dashed var(--good); outline-offset: 2px; }
 .ml-btn:disabled { opacity: .45; cursor: default; }
 .ml-start { border: 0; border-radius: 999px; padding: 18px 44px; font-size: 20px; }
 .ml-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 10px; width: 100%; }

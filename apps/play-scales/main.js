@@ -10,6 +10,7 @@ import './style.css';
 const L = (en, fr) => ({ en, fr });
 const game = createGame({
   id: 'play-scales',
+  quiet: (ms) => { quietAt = Math.max(quietAt, performance.now() + ms + 150); }, // shell sounds (celebrate): the microphone stays shut
   title: L('Play the scale', 'Joue la gamme'),
   strings: {
     listen: L('Hear the scale', 'Écouter la gamme'),

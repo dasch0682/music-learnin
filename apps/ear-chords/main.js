@@ -135,7 +135,7 @@ async function answer(type, button) {
     button.disabled = true;
     streak = 0;
     nextBtn.classList.remove('ec-show');
-    if (missed) game.flash(false);
+    if (missed) { choices.querySelector(`[data-type="${q.item}"]`)?.classList.add('ml-reveal'); game.flash(false); } // 2nd miss: show the answer
     else { missed = true; await game.attempt(rec); }
     timer = setTimeout(() => play(q.arp), 650); // hear it again, then retry
   }
