@@ -97,6 +97,7 @@ for (const level of levels(6)) {
       check(st.marks.length === m.length - 1 && st.marks.every((ok, i) => ok === (i + 1 !== at)), `L${level}: marks ${JSON.stringify(st.marks)}`);
       const colours = await page.$$eval('.ml-note', (e) => e.map((g) => g.style.color));
       check(colours.slice(1).every((c, i) => c === (st.marks[i] ? 'var(--good)' : 'var(--bad)')), `L${level}: colours ${JSON.stringify(colours)}`);
+      await page.waitForFunction(() => document.querySelector('.ml-stage.ml-bad'), null, { timeout: 4000 }).catch(() => check(false, `L${level}: no wrong-answer feedback on the stage`));
       if (dir && round === 0 && level === 4) await page.screenshot({ path: `${dir}/md-4-wrong.png` });
       if (round === 1) { // a second mistake is not logged again
         await enter([bad, ...m.slice(2)]);

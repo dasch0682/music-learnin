@@ -1,6 +1,7 @@
 // Plays every level of Five-note jam: one wrong phrase, then right ones. Taps are timed on the backing clock.
 // Usage: npx vite --port 5407 --strictPort &   then   PORT=5407 node tools/penta-jam.test.mjs [screenshot-dir]
 import { launch, FAST, rounds, levels, combos, CORE } from './lib/harness.mjs';
+import { smoke, skillOf, setField, closeSettings, persistCheck, readAttempts } from './lib/shared-b.mjs';
 const base = `http://localhost:${process.env.PORT || 5407}/penta-jam/`;
 const dir = process.argv[2];
 const browser = await launch({ speed: 1 }); // taps are timed against the real clock
@@ -10,7 +11,7 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'penta-jam').sort((x, y) => x.t - y.t)); }; }));
+const attempts = () => readAttempts(page, 'penta-jam');
 const mod = (a, n) => ((a % n) + n) % n;
 const CH = { C: [0, 4, 7], F: [5, 9, 0], G: [7, 11, 2] };
 
@@ -90,6 +91,66 @@ const chordPlan = async (s, ok) => {
 };
 plans[3] = plans[4] = plans[8] = chordPlan;
 
+await smoke({ browser, url: base, check });
+
+// ---- Musical content of every level, over many generated phrases (no playing: spec() of far-away phrases).
+const CHORDS = { '': [0, 4, 7], m: [0, 3, 7], 7: [0, 4, 7, 10], m7: [0, 3, 7, 10], maj7: [0, 4, 7, 11] };
+const ROOT = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+const chordOf = (sym) => { const m = /^([A-G])(♭?)(.*)$/.exec(sym); const r = mod(ROOT[m[1]] - (m[2] ? 1 : 0), 12); return { root: r, pcs: CHORDS[m[3]].map((x) => mod(r + x, 12)), third: mod(r + CHORDS[m[3]][1], 12), seventh: CHORDS[m[3]][3] == null ? null : mod(r + CHORDS[m[3]][3], 12) }; };
+const PENT = { C: [0, 2, 4, 7, 9], Am: [9, 0, 2, 4, 7], G: [7, 9, 11, 2, 4], Dm: [2, 5, 7, 9, 0], F: [5, 7, 9, 0, 2], Em: [4, 7, 9, 11, 2], Gp: [7, 9, 11, 2, 4] };
+const SYMS = {
+  1: [['C', 'C']], 2: [['C', 'C', 'C', 'C']], 3: [['C', 'F', 'G', 'C']],
+  4: [['Am', 'F', 'C', 'G'], ['G', 'C', 'D', 'G'], ['Dm', 'B♭', 'F', 'C'], ['F', 'B♭', 'C', 'F']],
+  5: [['C', 'G', 'C', 'G'], ['C', 'F', 'G', 'C']],
+  6: [['A7', 'A7', 'A7', 'A7'], ['D7', 'D7', 'A7', 'A7'], ['E7', 'D7', 'A7', 'E7']],
+  7: [['Dm7', 'G7', 'Dm7', 'G7']], 8: [['Dm7', 'G7', 'Cmaj7', 'Cmaj7']], 9: [['Dm7', 'Dm7', 'Dm7', 'Dm7']],
+};
+function content(level, s) {
+  const tag = `L${level} ${s.item}`;
+  const symRow = SYMS[level].find((r) => r.join() === s.bars.map((b) => b.sym).join());
+  check(!!symRow, `${tag}: chords ${s.bars.map((b) => b.sym)}`);
+  check(s.bars.length === (level === 1 ? 2 : 4) && s.end - s.start === s.bars.length * 4, `${tag}: bars ${s.bars.length} span ${s.end - s.start}`);
+  s.bars.forEach((b, i) => {
+    const pcs = [...new Set(b.pads.map(pcOf))];
+    check(b.pads.every((m, k) => k === 0 || m > b.pads[k - 1]) && b.pads[0] >= 52 && b.pads.at(-1) <= 77, `${tag}: pads ${b.pads}`);
+    const c = chordOf(b.sym);
+    check(JSON.stringify(b.tones) === JSON.stringify(c.pcs.filter((x) => pcs.includes(x))) || [...b.tones].sort().join() === c.pcs.filter((x) => pcs.includes(x)).sort().join(), `${tag}: tones ${b.tones} of ${b.sym} on ${pcs}`);
+    check(b.tones.length >= 2, `${tag}: few tones`);
+    check(b.guides.every((g) => (g === c.third || g === c.seventh) && b.tones.includes(g)), `${tag}: guides ${b.guides} of ${b.sym}`);
+    // the pads are a pentatonic scale (5 pitch classes), plus one extra pad (level 5) or the blue note (level 6)
+    const extra = level === 5 ? 1 : level === 6 ? 1 : 0;
+    check(pcs.length === 5 + extra, `${tag}: ${pcs.length} pitch classes on the pads`);
+    if (level === 6) check(pcs.includes(3) && [9, 0, 2, 4, 7].every((x) => pcs.includes(x)), `${tag}: A minor pentatonic + E♭`);
+    if (level === 5) check([0, 2, 4, 7, 9].every((x) => pcs.includes(x)) && pcs.includes(pcOf(s.xm)), `${tag}: C pentatonic + extra`);
+    if (level <= 3) check([0, 2, 4, 7, 9].every((x) => pcs.includes(x)), `${tag}: C major pentatonic`);
+    if (level === 4) { const key = s.item.split(':')[0]; check(PENT[key].every((x) => pcs.includes(x)) && pcs.length === 5, `${tag}: pentatonic of ${key}`); }
+    if (level === 7 || level === 9) check(PENT.Dm.every((x) => pcs.includes(x)), `${tag}: D minor pentatonic`);
+    if (level === 8) check((PENT[i === 0 ? 'Dm' : 'Em']).every((x) => pcs.includes(x)), `${tag}: pentatonic of bar ${i}`);
+  });
+  if (level === 2) check((s.item === 'home' && s.target === 0) || (s.item === 'open' && s.target === 7), `${tag}: target ${s.target}`);
+  if (level === 4) check(['Am', 'G', 'Dm', 'F'].includes(s.item.split(':')[0]) && s.item.includes(':'), `${tag}: item`);
+  if (level === 5) {
+    check(s.item.startsWith('4th') ? s.xm === 65 : s.xm === 71, `${tag}: extra pad ${s.xm}`);
+    check(s.item.split(':')[1] === (s.bars[1].sym === 'G' ? 'I-V-I-V' : 'I-IV-V-I'), `${tag}: item vs chords`);
+  }
+  if (level === 6) check(['line1', 'line2', 'line3'].includes(s.item) && s.changes.every((i, k) => i === 0 || s.bars[i].sym !== s.bars[i - 1].sym) && s.changes.length >= 1, `${tag}: changes ${s.changes}`);
+}
+{
+  const p0 = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'en-US' });
+  await p0.goto(base);
+  for (const level of levels(9)) {
+    await p0.evaluate((l) => localStorage.setItem('ml:settings:penta-jam', JSON.stringify({ level: l, tempo: 50 })), level);
+    await p0.reload();
+    await p0.click('.ml-start');
+    await p0.waitForFunction(() => window.__test?.running);
+    const items = new Set();
+    for (let i = 0; i < rounds(40, 8); i++) { const s = await p0.evaluate((k) => window.__test.spec(k), 500 + i); items.add(s.item); content(level, s); }
+    if (level === 4 && !FAST) check(items.size >= 3, `L4: only ${[...items]}`);
+    if (level === 6 && !FAST) check(items.size === 3, `L6: only ${[...items]}`);
+  }
+  await p0.close();
+}
+
 await page.goto(base);
 for (const L of FAST ? [1, 5, 9] : [1, 2, 3, 4, 5, 6, 7, 8, 9, '5b']) {
   const level = parseInt(L);
@@ -106,7 +167,7 @@ for (const L of FAST ? [1, 5, 9] : [1, 2, 3, 4, 5, 6, 7, 8, 9, '5b']) {
   const before = (await attempts()).length;
   const lv = await page.evaluate(() => window.__test.level);
   check(lv === level, `L${level}: level is ${lv}`);
-  const phrases = rounds(level === 5 ? 4 : 3, 2);
+  const phrases = level === 1 ? rounds(6, 2) : rounds(level === 5 ? 4 : 3, 2);
   const expected = [];
   for (let p = 0; p < phrases; p++) {
     const s = await page.evaluate((i) => window.__test.spec(i), p);
@@ -139,11 +200,55 @@ for (const L of FAST ? [1, 5, 9] : [1, 2, 3, 4, 5, 6, 7, 8, 9, '5b']) {
   check(mine.length === phrases, `L${level}: attempts ${mine.length}/${phrases}`);
   mine.forEach((a, k) => {
     check(a.ok === expected[k][0], `L${level}: phrase ${k} ok=${a.ok}, expected ${expected[k][0]}`);
-    check(a.level === level && a.item === expected[k][1] && a.skill === ({ 1: 'play.penta.free', 2: 'play.penta.callresponse', 3: 'play.penta.harmony', 4: 'play.penta.harmony', 5: 'play.tension', 6: 'play.penta.blues', 7: 'play.penta.modal', 8: 'play.penta.jazz', 9: 'play.penta.outside' })[level], `L${level}: attempt ${JSON.stringify(a)}`);
+    check(a.level === level && a.item === expected[k][1] && a.skill === skillOf('penta-jam', level), `L${level}: attempt ${JSON.stringify(a)}`);
   });
+  // Wrong phrase is logged as wrong with its detail; progression: five clean phrases in a row offer the next level.
+  if (level === 1) check(mine[0]?.detail?.notes === 1 && mine[1]?.detail?.notes >= 4, `L1: details ${JSON.stringify(mine.map((a) => a.detail))}`);
+  if (level === 1) {
+    const up = await page.evaluate(() => window.__test.canLevelUp);
+    check(up === !FAST, `L1: canLevelUp=${up} after ${phrases} phrases`); // full mode: 1 wrong + 5 right; fast mode (2 phrases) must not offer it
+    if (!FAST) {
+      check(await page.$eval('.pj-controls .ml-primary', (e) => !e.hidden), 'L1: next-level button visible');
+      await page.click('.pj-controls .ml-primary');
+      await page.waitForFunction(() => window.__test.level === 2, null, { timeout: 5000 }).catch(() => check(false, 'L1: next-level click'));
+    }
+  }
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   check(!overflow, `L${level}: overflow`);
   console.log(`L${level}`, mine.map((a) => `${a.skill} ${a.item} ${a.ok}`).join(' | '));
+}
+// ---- Timing tolerance (level 3, tempo 140): a chord tone is accepted from `a` beats before to `b` beats after the beat, not outside.
+{
+  await page.evaluate(() => localStorage.setItem('ml:settings:penta-jam', JSON.stringify({ level: 3, tempo: 140, names: false })));
+  await page.reload();
+  await page.click('.ml-start');
+  await page.waitForFunction(() => window.__test?.running);
+  const before = (await attempts()).length;
+  const spb = await page.evaluate(() => window.__test.spb);
+  const a = Math.max(0.3, 0.15 / spb), b = Math.max(0.45, 0.22 / spb);
+  const s = await page.evaluate(() => window.__test.spec(0));
+  const offs = [-a - 0.3, -a + 0.12, b - 0.12, b + 0.3];
+  for (let i = 0; i < 4; i++) await tap(s.start + 4 * i + offs[i], tonesOf(s.bars[i]), 60);
+  await page.waitForFunction((n) => window.__test.results.length >= n, 1, { timeout: 30000 });
+  const [r] = (await attempts()).slice(before);
+  check(r && JSON.stringify(r.detail.hits) === '[0,1,1,0]' && r.ok === false, `timing: hits ${JSON.stringify(r?.detail)} for offsets ${offs.map((x) => x.toFixed(2))}`);
+}
+// ---- Settings: level, tempo and note names take effect, are saved, and survive a reload.
+{
+  await setField(page, 0, 4);
+  await page.waitForFunction(() => window.__test.level === 4, null, { timeout: 5000 }).catch(() => check(false, 'level setting not applied live'));
+  await closeSettings(page);
+  await persistCheck({
+    page, url: base, slug: 'penta-jam', fields: [[1, 'tempo', 100], [2, 'names', true]], check,
+    applied: async (pg) => {
+      const spb = await pg.evaluate(() => window.__test.spb), lvl = await pg.evaluate(() => window.__test.level);
+      const labels = await pg.$$eval('.ml-pad', (e) => e.map((x) => x.textContent));
+      return Math.abs(spb - 0.6) > 0.001 ? `spb ${spb}` : lvl !== 4 ? `level ${lvl}` : labels.some((l) => !l) ? `pad labels ${labels}` : '';
+    },
+  });
+  await setField(page, 2, false);
+  await page.waitForFunction(() => [...document.querySelectorAll('.ml-pad')].every((e) => !e.textContent), null, { timeout: 3000 }).catch(() => check(false, 'names off not applied'));
+  check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), 'overflow with settings dialog');
 }
 check(!errors.length, 'console: ' + errors.join(' | '));
 await browser.close();
