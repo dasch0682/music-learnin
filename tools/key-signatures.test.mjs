@@ -109,7 +109,7 @@ for (const level of levels(6)) {
       check(await page.locator('.ml-white').count() <= 12, `${where}: too many keys`);
       await shot();
       for (let w = 0; w < (round === 0 ? 1 : round === 1 ? 2 : 0); w++) {
-        const bad = [s.midi + 1, s.midi - 1, s.midi + 2].filter((m) => m >= 60 && m <= 76)[w];
+        const bad = [s.midi + 1, s.midi - 1, s.midi + 2, s.midi - 2].filter((m) => m >= 60 && m <= 76)[w];
         // the hint is short-lived: record it with an observer instead of polling for it
         if (w === 1) await page.evaluate((m) => { window.__hinted = false; const k = document.querySelector(`.ml-key[data-midi="${m}"]`); new MutationObserver(() => { if (k.classList.contains('ml-hint')) window.__hinted = true; }).observe(k, { attributes: true, attributeFilter: ['class'] }); }, s.midi);
         await page.locator(`.ml-key[data-midi="${bad}"]`).dispatchEvent('pointerdown', { pointerId: 1 });
