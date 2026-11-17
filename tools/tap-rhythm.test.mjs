@@ -2,6 +2,7 @@
 // Level 9 is also checked pattern by pattern (5/8, 7/8, 5/4) and levels 8 -> 9 through the "next level" button.
 // Usage: npx vite --port 5304 --strictPort &   then   PORT=5304 node tools/tap-rhythm.test.mjs [screenshot-dir]
 import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { smoke, skillOf, setField, closeSettings, persistCheck, readAttempts } from './lib/shared-b.mjs';
 const base = `http://localhost:${process.env.PORT || 5304}/tap-rhythm/`;
 const dir = process.argv[2];
 const browser = await launch({ speed: 1 }); // taps are timed against the real clock
@@ -12,7 +13,7 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
 const state = () => page.evaluate(() => ({ ...window.__test }));
-const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'tap-rhythm').sort((x, y) => x.t - y.t)); }; }));
+const attempts = () => readAttempts(page, 'tap-rhythm');
 
 // ---- expected onsets, recomputed from the item id (independent of the app's code) ----
 const CELLS = {
@@ -98,6 +99,30 @@ async function load(level, extra = {}) {
 }
 const overflow = () => page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
 
+// Cells (length in quarters) allowed per level, and the bar length of each level (6/8 counts in dotted quarters: 3 quarters).
+const ALLOWED = {
+  2: ['h', 'ee', 'q'], 3: ['q', 'ee', 'h', 'w'], 4: ['ex', 'q', 'r', 'xe', 'ee', 'h'], 5: ['sse', 'ess', 'h', 'q', 'ee', 'ssss'],
+  6: ['e.s', 'q', 'ee', 'q.e', 'h', 'eqe'], 7: ['ee', 't', 'q', 'h'], 8: ['h.', 'q.', 'eee', 'qe'],
+};
+const FEATURE = { 4: ['ex', 'xe', 'r'], 5: ['sse', 'ess', 'ssss'], 6: ['e.s', 'q.e', 'eqe'], 7: ['t'] };
+function content(s, tag) {
+  const level = s.level;
+  if (level === 1) { check(['slow', 'medium', 'fast'].includes(s.item) && s.expected.length === 8, `${tag}: pulse ${s.item}`); return; }
+  const body = s.item.replace(/^(?:\d\/\d:[\d+]+:)?(?:sw:)?/, '');
+  const bars = body.split('|').map((b) => b.split('-'));
+  const barLen = level === 8 ? 3 : level === 9 ? null : 4;
+  if (level === 9) { checkOdd(s, tag); return; }
+  check(bars.length === (level === 8 ? 2 : 1), `${tag}: ${bars.length} bars in ${s.item}`);
+  for (const b of bars) check(Math.abs(b.reduce((a, id) => a + CELLS[id].reduce((x, e) => x + e[0], 0), 0) - barLen) < 1e-6, `${tag}: bar ${b} does not add up to ${barLen}`);
+  check(bars.flat().every((id) => ALLOWED[level].includes(id)), `${tag}: cell outside the level in ${s.item}`);
+  if (FEATURE[level]) check(bars.flat().some((id) => FEATURE[level].includes(id)), `${tag}: level feature missing in ${s.item}`);
+  if (level === 7) check(!s.item.startsWith('sw:') || bars.flat().includes('ee'), `${tag}: swing without eighths ${s.item}`);
+  const exp = expectedFor(s);
+  check(exp.length === s.expected.length && exp.every((v, i) => Math.abs(v - s.expected[i]) <= 1), `${tag}: onsets ${JSON.stringify(s.expected)} vs ${JSON.stringify(exp)}`);
+  check(s.meter === (level === 8 ? '6/8' : '4/4'), `${tag}: meter ${s.meter}`);
+}
+
+await smoke({ browser, url: base, check });
 await page.goto(base);
 const ONLY = process.env.LEVELS ? process.env.LEVELS.split(',').map(Number) : null;
 for (const level of levels(9)) {
@@ -107,7 +132,7 @@ for (const level of levels(9)) {
   await startIfIdle();
   let s = await state();
   const item = s.item;
-  check(s.level === level && s.skill === (['rhythm.pulse', 'rhythm.echo.basic', 'rhythm.read.basic', 'rhythm.rests', 'rhythm.sixteenths', 'rhythm.syncopation', 'rhythm.triplets', 'rhythm.compound', 'rhythm.odd'][level - 1]), `L${level}: skill ${s.skill}`);
+  check(s.level === level && s.skill === skillOf('tap-rhythm', level), `L${level}: skill ${s.skill}`);
   if (level === 9) checkOdd(s, 'L9');
   const exp = expectedFor(s);
   check(JSON.stringify(exp) === JSON.stringify(s.expected) || exp.every((v, i) => Math.abs(v - s.expected[i]) <= 1) && exp.length === s.expected.length, `L${level}: expected onsets ${JSON.stringify(s.expected)} vs ${JSON.stringify(exp)}`);
@@ -123,11 +148,70 @@ for (const level of levels(9)) {
   const mine = (await attempts()).slice(before);
   check(mine.length === 2 && !mine[0].ok && mine[1].ok, `L${level}: attempts ${JSON.stringify(mine.map((a) => a.ok))}`);
   check(mine.every((a) => a.level === level && a.skill === s.skill && a.item === item), `L${level}: bad skill/level/item ${JSON.stringify(mine.map((a) => [a.skill, a.level, a.item]))}`);
+  // Many more generated patterns (a tempo change draws a new one without playing).
+  const seen = new Set();
+  const sampleN = rounds(40, 6);
+  if (level >= 2) for (let k = 0; k < sampleN; k++) {
+    await page.evaluate(() => document.querySelector('.tr-score > *')?.setAttribute('data-old', '1')); // a new challenge redraws the score
+    await setField(page, 1, 100 + (k % 2) * 2);
+    await page.waitForFunction(() => !document.querySelector('.tr-score [data-old], .tr-score[data-old]') && window.__test.phase === 'idle', null, { timeout: 8000 }).catch(() => check(false, `L${level}: no new pattern after a settings change`));
+    const t = await state();
+    content(t, `L${level}~${k}`);
+    seen.add(t.item);
+  }
+  if (level >= 2) await closeSettings(page);
+  if (!FAST && level >= 2) check(seen.size >= (level === 2 ? 6 : 10), `L${level}: only ${seen.size} different patterns after sampling`);
   check(!(await overflow()), `L${level}: overflow`);
   console.log(`L${level}`, mine.map((a) => `${a.skill} ${a.item} ${a.ok}`).join(' | '));
 }
 
 if (ONLY) { await browser.close(); console.log(failed ? `${failed} failure(s)` : 'all good'); process.exit(failed ? 1 : 0); }
+
+// Tap timing tolerance: early or late inside the tolerance is right, outside it is wrong (the same notes, shifted).
+for (const level of rounds([3, 5, 6, 7, 8], [3])) {
+  await load(level);
+  await startIfIdle();
+  let s = await state();
+  const t = s.tol;
+  const runs = [['early inside', -Math.round(0.65 * t), true], ['late inside', Math.round(0.65 * t), true], ['late outside', Math.round(1.7 * t), false], ['early outside', -Math.round(1.7 * t), false]];
+  for (const [label, shift, ok] of runs) {
+    const r = await playRun(false, shift);
+    check(r.correct === ok, `L${level}: all taps ${label} (${shift} ms, tolerance ${t} ms) judged ${JSON.stringify(r)}`);
+    if (!ok) check(r.miss > 0, `L${level}: ${label}: no missed note reported`);
+    // a failed run waits for a tap (the pad is locked for 700 ms after a result); a right one is followed by a new pattern
+    await page.waitForFunction(() => { const t = window.__test; return t.phase === 'idle' || (t.phase === 'feedback' && !t.result.correct); }, null, { timeout: 8000 });
+    await page.waitForTimeout(800);
+    await page.evaluate(() => document.querySelector('.tr-pad').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })));
+    await page.waitForFunction(() => window.__test.turnStart != null || window.__test.phase === 'count', null, { timeout: 8000 });
+  }
+}
+// Silence is not an answer: a run without a single tap logs nothing.
+await load(3);
+{
+  const before = (await attempts()).length;
+  await startIfIdle();
+  await page.waitForFunction(() => window.__test.phase === 'count' || window.__test.phase === 'turn', null, { timeout: 5000 });
+  const n0 = (await state()).result?.run ?? 0;
+  await page.waitForFunction(() => window.__test.phase === 'idle' && window.__test.result?.run, null, { timeout: 20000 }).catch(() => {});
+  check((await attempts()).length === before, 'a run with no tap was logged');
+}
+// Settings: tempo, tolerance and latency take effect, are saved and survive a reload; the latency is compensated.
+await load(3);
+await persistCheck({
+  page, url: base, slug: 'tap-rhythm', fields: [[1, 'tempo', 80], [2, 'tolerance', 'strict'], [3, 'latency', 40]], check,
+  applied: async (pg) => {
+    const t = await pg.evaluate(() => ({ ...window.__test }));
+    return t.bpm !== 80 ? `bpm ${t.bpm}` : t.tol > Math.round(0.07 * Math.min(1.2, Math.max(0.8, Math.sqrt(72 / 80))) * 1000) + 1 ? `tol ${t.tol}` : '';
+  },
+});
+await startIfIdle();
+{
+  const r = await playRun(false); // turnStart already holds the latency: the press lands 40 ms after the click, on time once compensated
+  check(r.correct, `latency 40: run judged ${JSON.stringify(r)}`);
+}
+await setField(page, 2, 'easy');
+await page.waitForFunction(() => window.__test.tol > 100, null, { timeout: 5000 }).catch(() => check(false, 'easy tolerance not wider'));
+await closeSettings(page);
 
 // Level 9, one hand-picked pattern per meter and grouping.
 await load(9);
@@ -143,7 +227,7 @@ for (const id of ['5/8:3+2:eee-q|qe-ee', '5/8:2+3:ee-q.|q-eee', '7/8:2+2+3:q-ee-
   check(r.correct, `${id}: ${JSON.stringify(r)}`);
   await page.waitForTimeout(200);
   const mine = (await attempts()).slice(before);
-  check(mine.length === 1 && mine[0].ok && mine[0].item === id && mine[0].level === 9 && mine[0].skill === 'rhythm.odd', `${id}: attempt ${JSON.stringify(mine.map((a) => [a.item, a.ok]))}`);
+  check(mine.length === 1 && mine[0].ok && mine[0].item === id && mine[0].level === 9 && mine[0].skill === skillOf('tap-rhythm', 9), `${id}: attempt ${JSON.stringify(mine.map((a) => [a.item, a.ok]))}`);
   console.log('odd', id, r.correct);
   if (dir && id === '7/8:2+3+2:ee-qe-q|q-q.-ee') await page.screenshot({ path: `${dir}/tr-9-78.png` });
   await page.waitForTimeout(1500);
@@ -169,7 +253,7 @@ if (up) {
   await page.click('.tr-controls .ml-primary');
   await page.waitForFunction(() => window.__test.level === 9, null, { timeout: 5000 }).catch(() => {});
   const s = await state();
-  check(s.level === 9 && s.skill === 'rhythm.odd', `next level -> ${s.level}`);
+  check(s.level === 9 && s.skill === skillOf('tap-rhythm', 9), `next level -> ${s.level}`);
 }
 check(!errors.length, 'console: ' + errors.join(' | '));
 await browser.close();
