@@ -32,13 +32,25 @@ Files of your game may already exist from an interrupted run: read them and cont
 
 ## Testing (required, keep it cheap)
 
-- Dev server in the background on your port: `npx vite --port <PORT> --strictPort` (from the repo root). Stop it at the end.
-- `tools/<slug>.test.mjs`, modelled on the reference test: plays every level (a wrong answer, then right ones), checks the attempts
-  in IndexedDB (skill, level, item), recomputes expected answers from music theory where possible, checks no console error and no
-  overflow at 390 px, exits non-zero on failure. Run: `PORT=<PORT> node tools/<slug>.test.mjs <your scratch dir>`.
-- Look at no more than 3 screenshots per game (Read tool), chosen to cover light/dark and FR/EN.
+Two modes, explained in `tools/README.md`. Agents use the fast one.
+
+- While you work: `PORT=<PORT> npm run test:fast -- --only <your-slug>` (a few seconds to one minute). The runner starts and stops the dev
+  server itself if none answers on `PORT`. Use your own port.
+- Before you report: `PORT=<PORT> npm run test:changed` (fast mode, only the tests concerned by your changes: your app, or everything if you touched `packages/core`).
+- The full suite (`npm test`, every level, both themes) only when your task asks for it. Do not run it on your own.
+- Read the summary line only. On a failure the runner prints the test name and its last 15 lines; open `tools/.logs/<slug>.log` for more
+  (never paste a full log into your report or your context; use `tail` or `grep FAIL`).
 - Never run `vite build`. Use only your scratch dir for temporary files.
 - You cannot hear: check MIDI numbers by reasoning.
+
+`tools/<slug>.test.mjs`, modelled on the reference test: plays every level (a wrong answer, then right ones), checks the attempts
+in IndexedDB (skill, level, item), recomputes expected answers from music theory where possible, checks no console error and no
+overflow at 390 px, exits non-zero on failure. Build it on `tools/lib/harness.mjs`: `launch()`, `levels(n)`, `rounds(full, fast)`,
+`combos(list)`. In fast mode it must still open the game, play at least one wrong and one right round and check the log.
+Use `launch({ speed: 1 })` if the test taps against the clock or feeds a microphone.
+Single run: `PORT=<PORT> FAST=1 node tools/<slug>.test.mjs <your scratch dir>`.
+
+- Look at no more than 3 screenshots per game (Read tool), chosen to cover light/dark and FR/EN.
 
 ## Final report
 

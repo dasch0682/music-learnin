@@ -126,6 +126,7 @@ The script prints console errors. `LOCALE=en-US` switches the language.
 - Expose `window.__test = { state() , ... }` so a script can play the game. Put that script in `tools/<slug>.test.mjs`
   (see `tools/second-voice.test.mjs` and `tools/ear-cadences.test.mjs`): it plays every level, checks the attempts in IndexedDB,
   checks there is no console error and no horizontal overflow at 390 px, and exits non-zero on failure.
+  Tests have a fast mode (`npm run test:fast`) and a full mode (`npm test`): see `tools/README.md`.
 - Microphone games: the app never listens while it plays a sound of its own (see `apps/second-voice/main.js`).
 - Two threads run through all levels, first by ear and by hand, later with their names:
   the five-note (pentatonic) scale, and tension and release (second voice, cadences).

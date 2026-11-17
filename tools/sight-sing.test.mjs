@@ -116,7 +116,7 @@ for (const level of levels(6)) {
   }
 }
 // Voice setting: the melody moves by octaves, the clef follows.
-for (const voice of rounds(["low", "medium", "high"], ["low", "high"])) {
+for (const voice of rounds(["low", "medium", "high"], ["low"])) {
   await setup(3, voice);
   await listening();
   for (let k = 0; k < 6; k++) {

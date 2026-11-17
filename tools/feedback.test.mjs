@@ -148,7 +148,7 @@ const nextQ = async (p, ms = 1000) => { await sleep(ms); await p.waitForFunction
 }
 
 // ---- 3. silent and discreet
-for (const mode of ['silent', 'discreet']) {
+for (const mode of combos(['silent', 'discreet'])) {
   const p = await session();
   await openCad(p, { mode });
   await wrong(p);
@@ -165,7 +165,7 @@ for (const mode of ['silent', 'discreet']) {
 }
 
 // ---- 4, 9, 11. encouraging (English then French): messages, no shake, reveal, streak, accessibility
-for (const locale of ['en-US', 'fr-FR']) { // both languages: the message banks are per language
+for (const locale of combos(['en-US', 'fr-FR'])) { // fast: English only (the message banks of both languages are checked above)
   const lang = locale.slice(0, 2);
   const p = await session({ locale });
   await openCad(p, { mode: 'encouraging' });
@@ -237,7 +237,7 @@ for (const locale of ['en-US', 'fr-FR']) { // both languages: the message banks 
 }
 
 // ---- 7. silent: true on the call (find-a-note with "Play the note" on)
-for (const mode of FEEDBACK_MODES) {
+for (const mode of combos(FEEDBACK_MODES)) {
   const p = await session();
   await p.goto(base + 'find-a-note/');
   await p.evaluate((m) => localStorage.setItem('ml:settings:_feedback', JSON.stringify({ mode: m })), mode);

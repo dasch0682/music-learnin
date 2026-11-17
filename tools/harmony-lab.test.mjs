@@ -4,7 +4,7 @@
 import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5308}/harmony-lab/`;
 const dir = process.argv[2];
-const browser = await launch();
+const browser = await launch({ speed: 3 }); // marks and clears are checked a few hundred ms apart
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));

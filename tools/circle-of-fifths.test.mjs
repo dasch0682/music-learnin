@@ -122,9 +122,8 @@ await p2.waitForTimeout(300);
 const s2 = await p2.evaluate(() => window.__test.state());
 const [pp] = s2.steps[0][0].split(':');
 await p2.click(`g[data-pos="${pp}"][data-ring="M"] .cf-hit`);
-await p2.waitForTimeout(200);
-const shown = await p2.textContent(`g[data-pos="${pp}"][data-ring="M"] .cf-label`);
-const prompt = await p2.textContent('.cf-prompt');
+// one read for both texts: the next question may replace the prompt a moment after the answer
+const { shown, prompt } = await p2.evaluate((sel) => ({ shown: document.querySelector(sel + ' .cf-label').textContent, prompt: document.querySelector('.cf-prompt').textContent }), `g[data-pos="${pp}"][data-ring="M"]`);
 check(shown.replace(/\/.*/, '') === prompt || shown.includes(prompt), `EN label ${shown} vs prompt ${prompt}`);
 check(/^[A-G][♭♯]?$/.test(prompt), `EN prompt ${prompt}`);
 if (dir) await p2.screenshot({ path: `${dir}/cf-en-dark.png` });

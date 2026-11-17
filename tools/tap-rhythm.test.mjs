@@ -131,7 +131,7 @@ if (ONLY) { await browser.close(); console.log(failed ? `${failed} failure(s)` :
 
 // Level 9, one hand-picked pattern per meter and grouping.
 await load(9);
-for (const id of ['5/8:3+2:eee-q|qe-ee', '5/8:2+3:ee-q.|q-eee', '7/8:2+2+3:q-ee-qe|ee-q-q.', '7/8:3+2+2:q.-q-ee|eee-ee-q', '7/8:2+3:x'.replace(':2+3:x', ':2+3+2:ee-qe-q|q-q.-ee'), '5/4:3+2:q-ee-q-h', '5/4:2+3:h-h.'].slice(0, rounds(7, 2))) {
+for (const id of ['5/8:3+2:eee-q|qe-ee', '5/8:2+3:ee-q.|q-eee', '7/8:2+2+3:q-ee-qe|ee-q-q.', '7/8:3+2+2:q.-q-ee|eee-ee-q', '7/8:2+3:x'.replace(':2+3:x', ':2+3+2:ee-qe-q|q-q.-ee'), '5/4:3+2:q-ee-q-h', '5/4:2+3:h-h.'].slice(0, rounds(7, 1))) {
   const before = (await attempts()).length;
   await page.evaluate((i) => window.__show(i), id);
   let s = await state();
@@ -158,7 +158,7 @@ check(!late.correct, 'late taps judged correct');
 await load(8, { tempo: 140, tolerance: 'easy' });
 await startIfIdle();
 let up = false;
-for (let k = 0; k < rounds(10, 1) && !up; k++) {
+for (let k = 0; k < rounds(10, 0) && !up; k++) {
   const r = await playRun(false);
   check(r.correct, `L8 streak run ${k}`);
   up = (await state()).levelUp;

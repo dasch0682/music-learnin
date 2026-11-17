@@ -15,7 +15,7 @@ export const port = (dflt) => process.env.PORT || dflt;
 export const CHROME = process.env.CHROME || '/usr/bin/google-chrome';
 export const ARGS = ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'];
 
-const DEFAULT_SPEED = Number(process.env.FAST_SPEED) || 10;
+const DEFAULT_SPEED = Number(process.env.FAST_SPEED) || 5;
 // Divides the delay of every setTimeout/setInterval of the page (short ones, up to 20 ms, are kept).
 const speedScript = (f) => `(() => { const f = ${f}, st = window.setTimeout, si = window.setInterval;
   const sc = (d) => (d > 20 ? d / f : d);

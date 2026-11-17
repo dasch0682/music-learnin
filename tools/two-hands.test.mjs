@@ -103,7 +103,7 @@ check(!late.correct, 'late taps judged correct');
 // Keys F and J, and the next-level button after a clean streak (not in fast mode: 8 real-time runs).
 await load(3, { tolerance: 'easy' });
 let up = false;
-for (let k = 0; k < rounds(8, 1) && !up; k++) {
+for (let k = 0; k < rounds(8, 0) && !up; k++) {
   await tapPad();
   const r = await playRun(null, { keys: true });
   check(r.correct, `streak run ${k}: ${JSON.stringify(r)}`);

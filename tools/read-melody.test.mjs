@@ -174,7 +174,7 @@ for (const level of levels(6)) {
   const badNotes = await page.evaluate(() => document.querySelectorAll('.rm-note.rm-bad').length);
   check(badNotes === 1, `L${level}: ${badNotes} red notes`);
   if (dir && level === 5) await page.screenshot({ path: `${dir}/rm-5-wrong.png` });
-  if (level <= 5) {
+  if (level <= 5 && (!FAST || level === 3)) {
     await clickPlay();
     r = await playRun({ late: 300 });
     check(!r.correct && r.miss > 0, `L${level}: late run judged ${JSON.stringify(r)}`);

@@ -1,6 +1,6 @@
 name: Game tests
 
-# Plays every level of every game. Slow (about 40 minutes): runs once a week and on demand.
+# Plays every level of every game, both themes and languages (full mode, 4 tests at a time). Runs once a week and on demand.
 on:
   workflow_dispatch:
   schedule:
@@ -21,7 +21,10 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Play every game
-        run: |
-          npx vite --port 5220 --strictPort &
-          sleep 5
-          PORT=5220 node tools/test-all.mjs
+        run: PORT=5220 npm test -- --jobs 4 --retry 1
+      - name: Keep the test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: tools/.logs

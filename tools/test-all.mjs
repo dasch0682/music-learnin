@@ -1,7 +1,7 @@
 // Runs the game tests (tools/<slug>.test.mjs) against a dev server, in parallel, and prints a short summary.
 //   PORT=5220 node tools/test-all.mjs [options]   (starts a dev server on PORT if none answers)
 // Options:  --fast          fast mode (FAST=1: first/middle/last level, few rounds, accelerated timers)
-//           --jobs N        tests run at the same time (default: half the CPUs, at least 2)
+//           --jobs N        tests run at the same time (default: half the CPUs, at least 2; at least 4 with --fast)
 //           --only a,b      only these slugs            --changed   only the tests concerned by the git diff (see tools/README.md)
 //           --retry N       rerun a failing test up to N times; if it then passes it is reported as flaky
 //           --verbose       one line per test          --no-share  one Chrome per test instead of one shared Chrome
@@ -19,7 +19,8 @@ const argv = process.argv.slice(2);
 const flag = (n) => argv.includes('--' + n);
 const opt = (n, d) => { const i = argv.indexOf('--' + n); return i >= 0 ? argv[i + 1] : d; };
 const fast = flag('fast'), verbose = flag('verbose');
-const jobs = Math.max(1, Number(opt('jobs', Math.max(2, Math.floor(cpus().length / 2)))));
+// Most of a test is waiting (audio, real-time taps), so fast mode runs at least 4 at once.
+const jobs = Math.max(1, Number(opt('jobs', Math.max(fast ? 4 : 2, Math.floor(cpus().length / 2)))));
 const retry = Number(opt('retry', 0));
 const port = process.env.PORT || '5220';
 const all = readdirSync(dir).filter((x) => x.endsWith('.test.mjs')).map((f) => f.replace('.test.mjs', '')).sort();
@@ -27,7 +28,7 @@ const all = readdirSync(dir).filter((x) => x.endsWith('.test.mjs')).map((f) => f
 function changedSlugs() {
   const sh = (c) => { try { return execSync(c, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(Boolean); } catch { return []; } };
   const base = sh('git rev-parse --verify -q origin/main').length ? 'origin/main' : 'HEAD';
-  const files = new Set([...sh(`git diff --name-only ${base}`), ...sh('git ls-files --others --exclude-standard')]);
+  const files = new Set(process.env.CHANGED_FILES ? process.env.CHANGED_FILES.split(',') : [...sh(`git diff --name-only ${base}`), ...sh('git ls-files --others --exclude-standard')]); // CHANGED_FILES=a,b: for trying the mapping
   const out = new Set();
   for (const f of files) {
     let m;
