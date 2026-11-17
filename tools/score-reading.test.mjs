@@ -1,6 +1,6 @@
 // Plays every level of Transpose: one wrong answer, then the right ones. Checks the theory and the drawing too.
 // Usage: npx vite --port 5305 --strictPort &   then   PORT=5305 node tools/score-reading.test.mjs [screenshot-dir]
-import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { launch, FAST, rounds, levels, combos, readAttempts, scaled, sleep } from './lib/harness.mjs';
 const ID = 'score-reading';
 const base = `http://localhost:${process.env.PORT || 5305}/${ID}/`;
 const dir = process.argv[2];
@@ -11,7 +11,7 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const attempts = () => page.evaluate((id) => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === id).sort((x, y) => x.t - y.t)); }; }), ID);
+const attempts = () => readAttempts(page, ID);
 
 // ---------- theory, written by hand, independent from the game code ----------
 // Concert pitch = written pitch + this many semitones (B-flat instrument: written C sounds B-flat below).
@@ -31,7 +31,7 @@ const SIG_SHIFT = { Bb: -2, Eb: -3 }; // fifths, for a part written for the inst
 console.log('semitones from written to sounding:', JSON.stringify(SEMIS), '| signature shift (fifths):', JSON.stringify(SIG_SHIFT));
 
 const state = () => page.evaluate(() => window.__test.state());
-const ready = () => page.waitForFunction(() => window.__test.state() && !window.__test.state().locked, null, { timeout: 12000 });
+const ready = () => page.waitForFunction(() => window.__test.state() && !window.__test.state().locked, null, { timeout: scaled(12000) });
 async function setup(level, lang, theme) {
   await page.evaluate(([id, l, lg, th]) => { localStorage.setItem('ml:settings:' + id, JSON.stringify({ level: l, hear: true })); localStorage.setItem('ml:lang', lg); localStorage.setItem('ml:theme', th); }, [ID, level, lang, theme]);
   await page.reload();
@@ -51,6 +51,19 @@ const press = async (midi) => {
   await k.dispatchEvent('pointerdown', { pointerId: 1 });
   await k.dispatchEvent('pointerup', { pointerId: 1 });
 };
+// Press a key and read the heads of a staff in the SAME page task: after the last note the game moves to the next
+// round on a timer (and on the audio clock), so a separate round trip from Node can see the next question instead.
+const pressAndHeads = (midi, sel) => page.evaluate(([m, s]) => {
+  const k = document.querySelector(`.ml-key[data-midi="${m}"]`);
+  for (const t of ['pointerdown', 'pointerup']) k.dispatchEvent(new PointerEvent(t, { pointerId: 1, bubbles: true, composed: true, cancelable: true }));
+  return [...document.querySelectorAll(s + ' .ml-note')].map((g) => ({ cy: +g.querySelector('ellipse').getAttribute('cy'), acc: [...g.querySelectorAll('text')].map((t) => t.textContent).join(''), color: g.style.color }));
+}, [midi, sel]);
+/** Waits until the log holds more rows than `n` (the write is asynchronous and slower under load), then returns the new rows. */
+async function newAttempts(n) {
+  const end = Date.now() + scaled(10000);
+  while (Date.now() < end) { if ((await attempts()).length > n) { await sleep(150); return (await attempts()).slice(n); } await sleep(50); }
+  return [];
+}
 const wrongKey = (s) => { for (const m of [s.win[0], s.win[1]]) if (m !== s.exp[s.pos]) return m; };
 
 function checkHead(d, clef, n, where) {
@@ -63,7 +76,9 @@ for (const level of levels(6)) {
   await setup(level, 'fr', 'dark');
   const seen = new Set();
   const nRounds = level === 1 ? 10 : rounds(8, 2); // level 1 keeps its clean streak (next-level button)
-  for (let round = 0; round < nRounds; round++) {
+  // Instruments are drawn at random (a small pool may repeat): in full mode play on until every instrument was seen (at most 40 rounds).
+  const missing = () => !FAST && ((level === 2 && !(seen.has('Eb') && seen.has('F'))) || (level === 3 && seen.size < 2));
+  for (let round = 0; round < nRounds || (missing() && round < 40); round++) {
     await ready();
     const s = await state();
     seen.add(s.item);
@@ -167,17 +182,16 @@ for (const level of levels(6)) {
         check((await state()).pos === 0, `${where}: a wrong key moved on`);
       }
       for (let i = 0; i < s.exp.length; i++) {
-        await press(s.exp[i]);
-        await page.waitForTimeout(60);
+        let hd = null;
+        if (s.kind === 'motif') hd = await pressAndHeads(s.exp[i], '.sr-target');
+        else await press(s.exp[i]);
         if (s.kind === 'motif') {
-          const hd = await heads('.sr-target');
           check(hd.filter((x) => x.color !== 'transparent').length === i + 1, `${where}: ${i + 1} notes should be on the answer staff`);
           if (i === s.exp.length - 1) s.target.forEach((t, k) => checkHead(hd[k], 'treble', { step: t.step, acc: level === 6 ? 0 : t.acc }, `${where} answer ${k}`));
         }
       }
     }
-    await page.waitForTimeout(250);
-    const mine = (await attempts()).slice(before);
+    const mine = await newAttempts(before);
     check(mine.length === 1 && mine[0].ok === (round !== 0) && mine[0].level === level && mine[0].item === s.item && mine[0].skill === 'read.score', `${where}: logged ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.skill, a.level]))}`);
     await ready();
   }
@@ -188,8 +202,8 @@ for (const level of levels(6)) {
     await ready();
     check((await state()).level === 2, 'L1: next level does not work');
   }
-  if (level === 2) check(seen.has('Eb') && seen.has('F'), `L2: instruments ${[...seen]}`);
-  if (level === 3) check(seen.size >= 2, `L3: instruments ${[...seen]}`);
+  if (level === 2) check(!missing() && [...seen].every((i) => i === 'Eb' || i === 'F'), `L2: instruments ${[...seen]}`);
+  if (level === 3) check(!missing() && seen.size >= 1, `L3: instruments ${[...seen]}`);
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   console.log(`L${level}`, [...seen].join(' '));
   if (dir) {

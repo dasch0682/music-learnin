@@ -1,6 +1,7 @@
 // Plays every level of Write the tune: a wrong tune (twice at round 1), then the right one. Recomputes the music rules.
 // Usage: npx vite --port 5302 --strictPort &   then   PORT=5302 node tools/melody-dictation.test.mjs [screenshot-dir]
 import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { smoke, skillOf, setField, closeSettings, persistCheck, recordAudio, playedNotes, waitPlayed, readAttempts } from './lib/shared-b.mjs';
 const base = `http://localhost:${process.env.PORT || 5302}/melody-dictation/`;
 const dir = process.argv[2];
 const browser = await launch();
@@ -10,7 +11,8 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'melody-dictation').sort((x, y) => x.t - y.t)); }; }));
+const attempts = () => readAttempts(page, 'melody-dictation');
+const newAttemptsOf = async (before) => { const t0 = Date.now(); for (;;) { const a = (await attempts()).slice(before); if (a.length || Date.now() - t0 > 6000) return a; await new Promise((r) => setTimeout(r, 80)); } };
 const state = () => page.evaluate(() => window.__test.state());
 
 const pc = (m) => ((m % 12) + 12) % 12;
@@ -64,6 +66,8 @@ async function settle() { await page.waitForFunction(() => window.__test.state()
 /** A white key of the range that is not `not`. */
 const other = (s, not) => { const w = []; for (let m = s.range[0]; m <= s.range[1]; m++) if ([0, 2, 4, 5, 7, 9, 11].includes(pc(m)) && m !== not) w.push(m); return w[(not * 7) % w.length]; };
 
+await smoke({ browser, url: base, check });
+await recordAudio(page);
 await page.goto(base);
 for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:melody-dictation', JSON.stringify({ level: l, tempo: 120 })), level);
@@ -109,14 +113,40 @@ for (const level of levels(6)) {
     const done = await state();
     check(done.marks.every(Boolean) && done.entered.join() === m.slice(1).join(), `L${level} round ${round}: final ${JSON.stringify(done.entered)} vs ${m}`);
     if (dir && round === 2 && level === 6) await page.screenshot({ path: `${dir}/md-6-${s.clef}.png` });
-    await page.waitForTimeout(1500);
-    const mine = (await attempts()).slice(before);
-    check(mine.length === 1 && mine[0].ok === (round > 1) && mine[0].level === level && mine[0].item === String(s.n) && mine[0].skill === 'listen.dictation', `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.level, a.skill]))}`);
+    const mine = await newAttemptsOf(before);
+    await page.waitForFunction(() => { const t = window.__test.state(); return t.marks === null && t.locked === false; }, null, { timeout: 8000 });
+    check(mine.length === 1 && mine[0].ok === (round > 1) && mine[0].level === level && mine[0].item === String(s.n) && mine[0].skill === skillOf('melody-dictation', level), `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.level, a.skill]))}`);
   }
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
+  // Many more generated tunes without playing them: changing a setting draws a new question.
+  for (let i = 0; i < rounds(60, 12); i++) {
+    await setField(page, 1, 60 + (i % 2) * 5);
+    await page.waitForFunction((k) => window.__test.state().melody && window.__test.state().locked === false, null, { timeout: 5000 }).catch(() => {});
+    const t = await state();
+    rules(level, t);
+    seen.add(t.key); clefs.add(t.clef); lens.add(t.n);
+  }
+  await closeSettings(page);
+  if (level === 6) check(clefs.has('treble') && clefs.has('bass'), 'L6: both clefs should appear (sampled)');
+  if (level === 5 && !FAST) check(lens.has(6) && lens.has(7), 'L5: lengths 6 and 7 both appear');
+  if (level === 4 && !FAST) check(seen.size >= 3, `L4: keys ${[...seen]}`);
   if (level === 6) check(clefs.has('treble') && clefs.has('bass'), 'L6: both clefs should appear');
   if (level === 5) check(lens.size >= 1, 'L5 lengths');
   console.log(`L${level}`, [...seen].join(' '), [...clefs].join('/'), [...lens].join(','));
+}
+// Playback = the melody, spaced by the tempo setting; the setting is saved and still applied after a reload.
+await page.evaluate(() => localStorage.setItem('ml:settings:melody-dictation', JSON.stringify({ level: 3, tempo: 120 })));
+await page.reload();
+await page.click('.ml-start');
+{
+  let p = await waitPlayed(page, 5);
+  let st = await state();
+  check(p.length >= st.n && p.slice(0, st.n).every((x, i) => x.midi === st.melody[i]), `playback ${JSON.stringify(p.map((x) => x.midi))} vs ${st.melody}`);
+  check(Math.abs(p[1].when - p[0].when - 0.5) < 0.02, `tempo 120: spacing ${p[1].when - p[0].when}`);
+  await persistCheck({ page, url: base, slug: 'melody-dictation', fields: [[1, 'tempo', 60]], check });
+  p = await waitPlayed(page, 5);
+  check(p.length >= 2 && Math.abs(p[1].when - p[0].when - 1) < 0.02, `tempo 60 after reload: spacing ${p.length > 1 && p[1].when - p[0].when}`);
+  await persistCheck({ page, url: base, slug: 'melody-dictation', fields: [[0, 'level', 5]], check, applied: async (pg) => ((await pg.evaluate(() => window.__test.state().level)) === 5 ? '' : 'level not applied') });
 }
 // Undo, then next-level button after a clean streak.
 await page.evaluate(() => localStorage.setItem('ml:settings:melody-dictation', JSON.stringify({ level: 2, tempo: 120 })));
@@ -130,10 +160,12 @@ await page.click('.md-undo');
 check((await state()).entered.length === 0 && (await page.$$eval('.ml-note', (e) => e.length)) === 1, 'undo removes the note');
 for (let i = 0; i < 6; i++) {
   s = await state();
+  const before = JSON.stringify(s.melody);
   await enter(s.melody.slice(1));
-  await page.waitForTimeout(1900);
+  await page.waitForFunction((b) => { const t = window.__test.state(); return t.entered.length === 0 && !t.locked && JSON.stringify(t.melody) !== b; }, before, { timeout: 8000 });
 }
 check(await page.$eval('.md-next', (e) => e.classList.contains('md-show')), 'next-level button after a clean streak');
+await page.waitForSelector('.md-next.md-show');
 await page.click('.md-next');
 await page.waitForTimeout(400);
 check((await state()).level === 3, 'next level click');

@@ -1,17 +1,18 @@
-// Plays every level of Key signatures: one wrong answer, then the right one. Checks the theory and the drawing too.
+// Key signatures, every level: the game's tables against hand-written theory, the drawn signatures (glyph, place, per clef), keys and labels in both
+// languages, the expected key of 'play the note' questions, choices; one wrong, a second wrong, then the right answer (log once, skill from taxonomy),
+// error feedback, hint on the key after two misses, next-level offer after a clean streak (hidden on the last level), settings persistence, smoke.
 // Usage: npx vite --port 5305 --strictPort &   then   PORT=5305 node tools/key-signatures.test.mjs [screenshot-dir]
-import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { launch, FAST, rounds, levels } from './lib/harness.mjs';
+import { skillOf, makeChecker, smoke, persistCheck, readAttempts, newAttempts, fbLog, fbSince, isShown } from './lib/shared-a.mjs';
 const ID = 'key-signatures';
-const base = `http://localhost:${process.env.PORT || 5305}/${ID}/`;
+const base = `http://localhost:${process.env.PORT || 5220}/${ID}/`;
 const dir = process.argv[2];
+const C = makeChecker();
 const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR', hasTouch: true });
-const errors = [];
-page.on('pageerror', (e) => errors.push(String(e)));
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-let failed = 0;
-const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const attempts = () => page.evaluate((id) => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === id).sort((x, y) => x.t - y.t)); }; }), ID);
+C.watch(page);
+const check = C.check;
+const attempts = () => readAttempts(page, ID);
 
 // ---------- theory, written by hand, independent from the game code ----------
 const SHARPS = 'F C G D A E B', FLATS = 'B E A D G C F';
@@ -60,6 +61,7 @@ async function setup(level, lang, theme) {
 const state = () => page.evaluate(() => window.__test.state());
 const ready = () => page.waitForFunction(() => !window.__test.state().locked, null, { timeout: 8000 });
 
+await smoke({ browser, url: base, check, startSel: '.ml-title' });
 await page.goto(base);
 await page.waitForFunction(() => window.__test?.theory);
 // The game's own tables against the hand-written ones.
@@ -81,7 +83,7 @@ for (const k of th.keys) {
 for (const level of levels(6)) {
   await setup(level, 'fr', 'dark');
   const seen = new Set(), kinds = new Set(), clefs = new Set();
-  const nRounds = level === 1 ? 10 : rounds(level === 6 ? 24 : 8, 2); // level 1 keeps its clean streak (next-level button)
+  const nRounds = level === 1 ? 10 : rounds(level === 6 ? 24 : 8, 3); // level 1 keeps its clean streak (next-level button)
   for (let round = 0; round < nRounds; round++) {
     await ready();
     const s = await state();
@@ -95,6 +97,7 @@ for (const level of levels(6)) {
     check(level === 6 || s.clef === 'treble', `${where}: clef ${s.clef}`);
     if (s.kind !== 'sig') checkSig(await readSig('.ks-staff'), s.clef, s.answer, where);
     const before = (await attempts()).length;
+    const fb0 = (await fbLog(page)).length;
     const shot = async () => { if (dir && (round === 0 || (level === 6 && kinds.size === 2 && !seen.has('shot2') && seen.add('shot2')))) await page.screenshot({ path: `${dir}/ks-${level}-fr-dark${round ? '-b' : ''}.png` }); };
     if (s.kind === 'note') {
       // The note is drawn without accidental; the expected key follows the signature.
@@ -105,10 +108,17 @@ for (const level of levels(6)) {
       check(Math.abs(head.cy - yOf('treble', s.step)) < 0.01 && head.texts === 0, `${where}: note head ${JSON.stringify(head)}`);
       check(await page.locator('.ml-white').count() <= 12, `${where}: too many keys`);
       await shot();
-      if (round === 0) {
-        await page.locator(`.ml-key[data-midi="${s.midi >= 76 ? s.midi - 1 : s.midi + 1}"]`).dispatchEvent('pointerdown', { pointerId: 1 });
-        await page.waitForTimeout(200);
-        if (dir) await page.screenshot({ path: `${dir}/ks-${level}-wrong.png` });
+      for (let w = 0; w < (round === 0 ? 1 : round === 1 ? 2 : 0); w++) {
+        const bad = [s.midi + 1, s.midi - 1, s.midi + 2].filter((m) => m >= 60 && m <= 76)[w];
+        // the hint is short-lived: record it with an observer instead of polling for it
+        if (w === 1) await page.evaluate((m) => { window.__hinted = false; const k = document.querySelector(`.ml-key[data-midi="${m}"]`); new MutationObserver(() => { if (k.classList.contains('ml-hint')) window.__hinted = true; }).observe(k, { attributes: true, attributeFilter: ['class'] }); }, s.midi);
+        await page.locator(`.ml-key[data-midi="${bad}"]`).dispatchEvent('pointerdown', { pointerId: 1 });
+        check((await fbSince(page, fb0 + w, 1))[0] === 'bad', `${where}: wrong key ${w + 1} gave no error feedback`);
+        if (w === 1) {
+          await page.waitForFunction(() => window.__hinted, null, { timeout: 3000 }).catch(() => {});
+          check(await page.evaluate(() => window.__hinted), `${where}: right key not hinted after the second miss`);
+        } else check(!(await page.$('.ml-key.ml-hint')), `${where}: key hinted after the first miss`);
+        if (dir && w === 0) await page.screenshot({ path: `${dir}/ks-${level}-wrong.png` });
       }
       await page.locator(`.ml-key[data-midi="${s.midi}"]`).dispatchEvent('pointerdown', { pointerId: 1 });
       await page.locator(`.ml-key[data-midi="${s.midi}"]`).dispatchEvent('pointerup', { pointerId: 1 });
@@ -122,26 +132,31 @@ for (const level of levels(6)) {
         for (const b of buttons) checkSig(await readSig(`.ks-choices button[data-sig="${b.sig}"]`), s.clef, b.sig, `${where} choice ${b.sig}`);
       }
       await shot();
-      if (round === 0) {
-        await page.click(`.ks-choices button:not([data-sig="${s.answer}"])`);
-        await page.waitForTimeout(150);
+      // NOTE: after the second miss the choices are not revealed (no .ml-reveal): reported as an app gap, so only the error cue is checked here.
+      const wr = s.options.filter((o) => o !== s.answer);
+      for (let w = 0; w < (round === 0 ? 1 : round === 1 ? 2 : 0); w++) {
+        await page.click(`.ks-choices button[data-sig="${wr[w]}"]`);
+        check((await fbSince(page, fb0 + w, 1))[0] === 'bad', `${where}: wrong choice ${w + 1} gave no error feedback`);
+        check(await page.$eval(`.ks-choices button[data-sig="${wr[w]}"]`, (b) => b.classList.contains('ml-wrong') && b.disabled), `${where}: wrong choice not marked`);
       }
       await page.click(`.ks-choices button[data-sig="${s.answer}"]`);
     }
-    await page.waitForTimeout(250);
-    const mine = (await attempts()).slice(before);
-    check(mine.length === 1 && mine[0].ok === (round !== 0) && mine[0].level === level && mine[0].item === s.item && mine[0].skill === 'read.keysig', `${where}: logged ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.skill]))}`);
-    await page.waitForFunction((it) => { const st = window.__test.state(); return !st.locked && (st.streak === 0 || st.item !== it || true); }, s.item, { timeout: 8000 });
+    const mine = await newAttempts(page, ID, before, 1);
+    const k = (await fbLog(page)).slice(fb0);
+    check(round > 1 ? !k.includes('bad') && k.length >= 1 : k.filter((x) => x === 'bad').length === round + 1, `${where}: feedback ${k}`);
+    check(mine.length === 1 && mine[0].ok === (round > 1) && mine[0].game === ID && mine[0].level === level && mine[0].item === s.item && mine[0].skill === skillOf(ID, level), `${where}: logged ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.skill]))}`);
+    await page.waitForFunction(([it, sg]) => { const st = window.__test.state(); return !st.locked && (st.item !== it || st.step !== undefined || st.options?.join() !== sg); }, [s.item, (s.options || []).join()], { timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(level <= 2 ? 650 : 100);
   }
   if (level === 1) {
     // Nine clean answers: the "next level" button appears and works.
-    check(await page.evaluate(() => getComputedStyle(document.querySelector('.ks-offer')).visibility === 'visible'), 'L1: no next-level button');
+    check(await isShown(page, '.ks-offer'), 'L1: no next-level button');
     if (dir) await page.screenshot({ path: `${dir}/ks-1-offer.png` });
     await page.click('.ks-offer');
     await ready();
     check((await state()).level === 2, 'L1: next level does not work');
   }
+  if (level === 6 && !FAST) check(!(await isShown(page, '.ks-offer')), 'L6: next-level offered on the last level');
   if (level === 6 && !FAST) check(kinds.has('name') && kinds.has('sig') && clefs.size >= 3, `L6: kinds ${[...kinds]} clefs ${[...clefs]}`);
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   console.log(`L${level}`, [...seen].filter((x) => x !== 'shot2').join(' '), '|', [...kinds].join(' '), '|', [...clefs].join(' '));
@@ -157,7 +172,10 @@ for (const level of levels(6)) {
     check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level} en: overflow`);
   }
 }
-check(!errors.length, 'console: ' + errors.join(' | '));
+// settings persist (level and scale sound), the new level is applied
+await setup(1, 'fr', 'light');
+await persistCheck({ page, url: base, slug: ID, fields: [[0, 'level', 4], [1, 'sound', false]], check, start: false, applied: async (p) => { const st = await p.evaluate(() => window.__test.state()); return st.level === 4 ? '' : `level ${st.level}`; } });
+check(!C.errors.length, 'console: ' + C.errors.join(' | '));
 await browser.close();
-console.log(failed ? `${failed} failure(s)` : 'all good');
-process.exit(failed ? 1 : 0);
+console.log(C.failed ? `${C.failed} failure(s)` : 'all good');
+process.exit(C.failed ? 1 : 0);

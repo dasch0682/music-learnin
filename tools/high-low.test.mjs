@@ -1,64 +1,63 @@
-// Plays every level of High or low: one wrong answer, then the right one. Checks the notes against the contour.
-// Usage: npx vite --port 5408 --strictPort &   then   PORT=5408 node tools/high-low.test.mjs [screenshot-dir]
-import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
-const base = `http://localhost:${process.env.PORT || 5408}/high-low/`;
+// High or low, every level: content of the generated questions (notes vs contour, range, gaps, options), one wrong then right answers
+// (log: game, skill, level, item), error feedback and reveal after the 2nd miss, clean streak -> next level, settings persistence, smoke.
+// Usage: PORT=5220 [FAST=1] node tools/high-low.test.mjs [screenshot-dir]
+import { launch, FAST, rounds, levels } from './lib/harness.mjs';
+import { skillOf, makeChecker, overflows, smoke, persistCheck, answerChoice, levelUpCheck } from './lib/shared-a.mjs';
+const SLUG = 'high-low';
+const url = `http://localhost:${process.env.PORT || 5220}/${SLUG}/`;
 const dir = process.argv[2];
+const C = makeChecker(), { check, errors } = C;
 const browser = await launch();
+await smoke({ browser, url, check });
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
-const errors = [];
-page.on('pageerror', (e) => errors.push(String(e)));
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-let failed = 0;
-const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'high-low').sort((x, y) => x.t - y.t)); }; }));
-const SKILL = { 1: 'listen.highlow', 2: 'listen.highlow', 3: 'listen.highlow', 4: 'listen.highlow', 5: 'listen.contour', 6: 'listen.contour' };
+C.watch(page);
 const GAPS = { 1: [7, 16], 2: [2, 4], 3: [1, 2], 4: [0, 3] };
-const wait = (ms) => page.waitForTimeout(ms);
-await page.goto(base);
-for (const level of levels(6)) {
+const R = (v) => `.hl-answers button[data-value="${v}"]`;
+await page.goto(url);
+const open = async (level) => {
   await page.evaluate((l) => localStorage.setItem('ml:settings:high-low', JSON.stringify({ level: l })), level);
   await page.reload();
   await page.click('.ml-start');
   await page.waitForFunction(() => window.__test?.state());
-  const seen = new Set();
-  for (let round = 0; round < rounds(8, 2); round++) {
-    await page.waitForFunction(() => window.__test?.state());
-    const s = await page.evaluate(() => window.__test.state());
-    seen.add(s.item);
-    const n = s.notes;
-    check(n.every((m) => m >= 52 && m <= 84), `L${level}: note out of range ${n}`);
-    // recompute the answer from the notes
-    const steps = n.slice(1).map((m, i) => m - n[i]);
+};
+for (const level of levels(6)) {
+  await open(level);
+  let s = await page.evaluate(() => window.__test.state());
+  const seen = [];
+  for (let round = 0; round < rounds(16, 4); round++) {
+    const tag = `L${level} r${round}`;
+    seen.push(s.item);
+    const n = s.notes, steps = n.slice(1).map((m, i) => m - n[i]);
+    check(s.level === level && s.skill === skillOf(SLUG, level), `${tag}: state level/skill ${s.level} ${s.skill}`);
+    check(n.every((m) => m >= 52 && m <= 84), `${tag}: note out of range ${n}`);
     if (level <= 4) {
-      const d = steps[0];
-      const exp = d > 0 ? 'up' : d < 0 ? 'down' : 'same';
-      check(s.answer === exp && n.length === 2, `L${level}: answer ${s.answer} vs notes ${n}`);
-      check(level < 4 ? d !== 0 : true, `L${level}: unison`);
-      const [lo, hi] = GAPS[level];
-      check(Math.abs(d) >= lo && Math.abs(d) <= hi, `L${level}: gap ${d}`);
-      check(s.options.length === (level === 4 ? 3 : 2), `L${level}: options ${s.options}`);
+      const d = steps[0], exp = d > 0 ? 'up' : d < 0 ? 'down' : 'same';
+      check(s.answer === exp && n.length === 2, `${tag}: answer ${s.answer} vs notes ${n}`);
+      check(level === 4 || d !== 0, `${tag}: unison`);
+      check(Math.abs(d) >= GAPS[level][0] && Math.abs(d) <= GAPS[level][1], `${tag}: gap ${d}`);
+      check(s.item === (d > 0 ? '+' : d < 0 ? '-' : '') + Math.abs(d), `${tag}: item ${s.item} vs gap ${d}`);
+      check(JSON.stringify(s.options) === JSON.stringify(level === 4 ? ['up', 'same', 'down'] : ['up', 'down']), `${tag}: options ${s.options}`);
     } else {
       const word = steps.map((d) => (d > 0 ? 'u' : 'd')).join('');
-      check(s.answer === word && s.item === word && n.length === level - 3 + 1 + (level === 5 ? 0 : 0) , `L${level}: contour ${word} vs ${s.answer}, ${n.length} notes`);
-      check(steps.every((d) => Math.abs(d) >= 2 && Math.abs(d) <= 4), `L${level}: step sizes ${steps}`);
-      check(s.options.includes(s.answer), `L${level}: answer not among options`);
+      check(s.answer === word && s.item === word && n.length === level - 2, `${tag}: contour ${word} vs ${s.answer}, ${n.length} notes`);
+      check(steps.every((d) => Math.abs(d) >= 2 && Math.abs(d) <= 4), `${tag}: step sizes ${steps}`);
+      check(s.options.includes(s.answer) && new Set(s.options).size === s.options.length && s.options.length === 4, `${tag}: options ${s.options}`);
     }
-    const wrong = s.options.find((o) => o !== s.answer);
-    const before = (await attempts()).length;
-    if (round === 0) {
-      if (dir) await page.screenshot({ path: `${dir}/hl-${level}.png` });
-      await page.click(`.hl-answers button[data-value="${wrong}"]`);
-      await wait(150);
-    }
-    await page.click(`.hl-answers button[data-value="${s.answer}"]`);
-    await wait(1000);
-    const mine = (await attempts()).slice(before);
-    check(mine.length === 1 && mine[0].ok === (round !== 0) && mine[0].level === level && mine[0].item === s.item && mine[0].skill === SKILL[level], `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.skill, a.ok, a.item]))}`);
+    const wrongs = s.options.filter((o) => o !== s.answer).map(R);
+    if (round === 0 && dir && level % 2) await page.screenshot({ path: `${dir}/hl-${level}.png` });
+    const mode = round === 0 ? 'wrong1' : round === 1 && wrongs.length > 1 ? 'wrong2' : 'right';
+    s = await answerChoice({ page, slug: SLUG, level, skill: skillOf(SLUG, level), check, tag, s, mode, rightSel: R(s.answer), wrongSels: wrongs });
   }
-  check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
-  console.log(`L${level}`, [...seen].join(' '));
+  // the app allows repeats only for pools of 4 items or fewer (levels 3 and 5)
+  if (![3, 5].includes(level)) check(!seen.some((x, i) => i && x === seen[i - 1]), `L${level}: same item twice in a row ${seen}`);
+  if (!FAST || level === 1 || level === 6) await levelUpCheck({ page, slug: SLUG, level, check, rightSelOf: (st) => R(st.answer), nextSel: '.hl-next', last: level === 6, celebrate: true });
+  check(!(await overflows(page)), `L${level}: overflow`);
+  console.log(`L${level}`, [...new Set(seen)].join(' '));
 }
+// settings: the level chosen in the dialog is applied and kept after a reload
+await open(1);
+await persistCheck({ page, url, slug: SLUG, fields: [[0, 'level', 5]], check, applied: async (p) => { const s = await p.evaluate(() => window.__test.state()); return s.level === 5 && s.shapes ? '' : `level ${s.level}`; } });
 check(!errors.length, 'console: ' + errors.join(' | '));
 await browser.close();
-console.log(failed ? `${failed} failure(s)` : 'all good');
-process.exit(failed ? 1 : 0);
+console.log(C.failed ? `${C.failed} failure(s)` : 'all good');
+process.exit(C.failed ? 1 : 0);

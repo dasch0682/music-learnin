@@ -50,6 +50,10 @@ if (opt('only')) {
 }
 if (flag('changed')) { const c = changedSlugs(); list = list.filter((s) => c.includes(s)); }
 const label = fast ? 'fast' : 'full';
+// Tests on real timers (launch({ speed: 1 }): taps against the clock, microphone fed in real time) are the ones that fail when the CPUs are
+// busy, so at most half the CPUs run them at the same time (the other jobs are the tests that mostly wait on accelerated timers).
+const realtime = new Set(all.filter((s) => { try { return /speed:\s*1\b/.test(readFileSync(dir + s + '.test.mjs', 'utf8')); } catch { return false; } }));
+const rtMax = Math.max(1, Math.floor(cpus().length / 2));
 if (!list.length) { console.log(`${label}: no test concerned`); process.exit(0); }
 
 mkdirSync(logs, { recursive: true });
@@ -69,7 +73,7 @@ let server = null;
 if (!flag('no-share')) {
   server = await chromium.launchServer({ executablePath: CHROME, args: ARGS });
 }
-const env = { ...process.env, PORT: port, FAST: fast ? '1' : '', ...(server ? { PW_WS: server.wsEndpoint() } : {}) };
+const env = { ...process.env, PORT: port, TEST_JOBS: String(jobs), FAST: fast ? '1' : '', ...(server ? { PW_WS: server.wsEndpoint() } : {}) };
 
 function runOnce(slug, attempt, append = false) {
   return new Promise((resolve) => {
@@ -87,14 +91,24 @@ function runOnce(slug, attempt, append = false) {
 
 const t0 = Date.now();
 const results = [];
+const running = new Set();
 // --repeat N: every selected test is queued N times (round by round, so the same test never runs against itself).
 const queue = Array.from({ length: repeat }, (_, k) => list.map((slug) => ({ slug, k }))).flat();
-let next = 0;
+let rtRunning = 0;
+const pending = [...queue];
 async function worker() {
-  while (next < queue.length) {
-    const { slug, k } = queue[next++];
+  while (pending.length) {
+    // first queued run that may start now (a real-time test waits for a free slot; the same test never runs twice at once)
+    const i = pending.findIndex((q) => (!realtime.has(q.slug) || rtRunning < rtMax) && !running.has(q.slug));
+    if (i < 0) { await new Promise((r) => setTimeout(r, 200)); continue; }
+    const { slug, k } = pending.splice(i, 1)[0];
+    const rt = realtime.has(slug);
+    if (rt) rtRunning++;
+    running.add(slug);
     let r = await runOnce(slug, 0, k > 0), tries = 0, flaky = false;
     while (!r.ok && tries < retry) { tries++; r = await runOnce(slug, tries); if (r.ok) flaky = true; }
+    if (rt) rtRunning--;
+    running.delete(slug);
     if (!k) times[`${label}:${slug}`] = r.s;
     results.push({ slug, ...r, flaky });
     if (verbose) console.log(`${r.ok ? (flaky ? 'flaky' : 'ok   ') : 'FAIL '} ${slug} (${r.s} s)`);

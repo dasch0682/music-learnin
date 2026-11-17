@@ -1,6 +1,6 @@
 # Game tests
 
-One Playwright script per game: `tools/<slug>.test.mjs` (plus `platform`, `feedback`, `midi`). They play the game through `window.__test`,
+One Playwright script per game: `tools/<slug>.test.mjs` (plus `platform`, `feedback`, `midi`, and `catalog`: taxonomy against the files of every game, titles, level counts, skills reachable). They play the game through `window.__test`,
 check the attempts logged in IndexedDB, the music theory, the console and the 390 px layout. All share `tools/lib/harness.mjs`.
 
 ## Two modes
@@ -29,11 +29,14 @@ npm run test:fast -- --only find-a-note,high-low   # chosen tests
 npm run test:changed                               # fast + only what git diff (origin/main + uncommitted) touches
 npm test -- --jobs 4 --retry 1                     # full, 4 at once, a failing test runs once more (reported as flaky if it then passes)
 npm run test:fast -- --verbose                     # one line per test
+npm run test:fast -- --only read-chords --repeat 10  # 10 runs of the chosen tests, one line per test: `ok read-chords 10/10 (max 16 s)` (flakiness)
 PORT=5250 npm run test:fast                        # another port (use one per agent)
 ```
 
 Options: `--fast`, `--jobs N` (default half the CPUs, at least 2; at least 4 with `--fast`, since most of a test is waiting), `--only a,b`,
-`--changed`, `--retry N`, `--verbose`, `--no-share` (one Chrome per test).
+`--changed`, `--retry N`, `--repeat N` (every selected test N times, per-test pass count; a failure is printed once per test), `--verbose`, `--no-share` (one Chrome per test).
+Tests on real timers (`launch({ speed: 1 })`, found by the runner in their source) run at most `CPUs / 2` at a time (at least 1), whatever `--jobs` says: they are the ones that fail when the machine is busy.
+The runner passes `TEST_JOBS` (tests at once) to the tests; `TEST_SCALE=n` forces the load factor used by the helpers below.
 
 `--changed` maps `apps/<slug>/` to `tools/<slug>.test.mjs`, `tools/<slug>.test.mjs` to itself, the home page and `public/` to `platform`,
 and `packages/core/`, `vite.config.js`, `package.json`, `tools/lib/` and `tools/test-all.mjs` to every test.
@@ -60,6 +63,32 @@ await browser.close();
   100 ms or more follows. Use `launch({ speed: 1 })` when the test taps against the real clock (rhythm), feeds a microphone in real time,
   or reads a transient state (a toast, a star) a few hundred ms after it appeared. Tests with real timers today: `tap-rhythm`, `two-hands`,
   `penta-jam`, `read-melody`, `feedback`, `second-voice`, `sight-sing`, `sing-match`, `play-the-note`, `play-scales`; `harmony-lab` runs at 3x.
-- Read IndexedDB only after the app has started (`window.__test` answers): opening the database earlier creates it without its stores and the test hangs.
+- Read IndexedDB with `readAttempts(page, game)` (below), never with a bare `indexedDB.open`: opening the database before the app has created it makes it without its stores and the test hangs.
+- No fixed sleep after an action that triggers a timer of the game (next question, next level): wait for the visible change (a button re-rendered, `state()` changed, a row logged). A sleep shorter than the game's own delay passes on an idle machine and fails under load. Two questions in a row can be identical, so compare a DOM node (`document.contains(oldNode)`), not only the question data.
+- A check on what is shown right after the last answer of a round (a staff, a score) must run in the same `page.evaluate` as the tap: the game moves on by itself a few hundred ms later.
+- Random draws: never assert that every variant was seen in a fixed number of rounds. Play on until seen (bounded) in full mode, skip the coverage check in fast mode.
 - No shared state between tests: no fixed file names in `/tmp` (use `mkdtempSync`), no fixed ports other than `PORT`.
 - Run one test alone: `PORT=5250 FAST=1 node tools/<slug>.test.mjs` (without `FAST` it runs in full mode).
+
+## Helpers for stable tests (`tools/lib/harness.mjs`, additive)
+
+```js
+import { launch, openGame, readAttempts, waitAttempts, waitIdle, waitReady, loadScale, scaled, sleep, gameUrl } from './lib/harness.mjs';
+const page = await openGame(browser, 'read-chords', { theme: 'dark', lang: 'en', level: 3, settings: { sound: false }, start: false });
+const rows = await readAttempts(page, 'read-chords');          // oldest first; waits for the app's own database
+const rows2 = await waitAttempts(page, 'read-chords', rows.length + 1);   // polls until a new row is logged (throws after the timeout)
+await waitIdle(page);                                           // loaded, fonts, 2 frames, game unlocked
+```
+
+- `openGame(browser, slug, { theme, lang, level, settings, start, viewport, hasTouch, acceptDownloads, url, timeout })`: new isolated context and page
+  (`browser` = what `launch()` returns); `theme` 'light'/'dark' and `lang` 'fr'/'en' set both the context (colour scheme, locale) and `ml:theme`/`ml:lang`;
+  `level` and `settings` go to `ml:settings:<slug>` before the app runs, once per tab (a later `page.reload()` keeps what the test changed).
+  It waits for `window.__test` and for a start button or a first `state()`; `start: true` also taps the start button and waits for the first state.
+  `page.errors` collects page errors and console errors. `url` opens another URL (`?level=2`) in place of the game page. Never touches IndexedDB.
+- `readAttempts(page, game, { timeout, who })`: all attempts of `game` (all if falsy). Waits until the app has created `music-learnin` (checked with
+  `indexedDB.databases()` before opening), returns `[]` if it never does (nothing answered yet), throws if it exists without its `attempts` store.
+- `waitAttempts(page, game, n, { timeout })`: instead of `waitForTimeout(250)` after an answer.
+- `waitIdle(page, { timeout })`: `readyState` complete, `window.__test.state().locked` false when the game exposes it, two animation frames.
+- `loadScale()` is 1 on an idle machine and up to 6 under load (`loadavg / CPUs`, or `TEST_JOBS / CPUs / 2`); `scaled(ms)` multiplies a timeout by it.
+  `waitIdle`, `readAttempts`, `waitAttempts`, `openGame` already use it; use `scaled()` for your own `waitForFunction` timeouts.
+  `sleep(ms)` is a plain Node sleep (`page.waitForTimeout` is accelerated in fast mode, `sleep` is not).

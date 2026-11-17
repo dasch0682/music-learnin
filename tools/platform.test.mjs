@@ -1,7 +1,7 @@
 // Platform checks: ?level=, profiles, guided path, compare, rewards, update toast.
 // Usage: npx vite --port 5401 --strictPort &   then   PORT=5401 node tools/platform.test.mjs [screenshot-dir]
-import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
-import { writeFileSync, mkdtempSync } from 'node:fs';
+import { launch, FAST, rounds, levels, combos, openGame, readAttempts, waitAttempts, waitIdle, scaled, sleep } from './lib/harness.mjs';
+import { writeFileSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '');
@@ -16,7 +16,9 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const idb = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result); }; }));
+const idb = () => readAttempts(page, null); // waits for the app's own database (a bare indexedDB.open before the app would create it without stores)
+const until = async (fn, ms = 10000) => { const end = Date.now() + scaled(ms); while (Date.now() < end) { if (await fn()) return true; await sleep(50); } return false; };
+const gameLoaded = () => page.waitForFunction(() => document.querySelector('.ml-title')?.textContent, null, { timeout: scaled(15000) });
 const ls = (k) => page.evaluate((k) => localStorage.getItem(k), k);
 const overflow = () => page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
 const day = 86400000;
@@ -33,7 +35,7 @@ const mk = (skill, ok, t, extra = {}) => ({ id: 'seed' + (n++), t, dev: 'test', 
 
 // ---- 1. ?level=N
 await page.goto(base + 'play-the-note/?level=3');
-await page.waitForTimeout(400);
+await gameLoaded();
 let s = JSON.parse((await ls('ml:settings:play-the-note')) || '{}');
 check(s.level === 3, 'level=3 saved: ' + JSON.stringify(s));
 check(!page.url().includes('level='), 'level param removed from URL');
@@ -54,9 +56,9 @@ const first = profiles0[0].id;
 check((await ls('ml:profile:first')) === first, 'first profile owns legacy data');
 // a game answer carries who
 await page.goto(base + 'find-a-note/');
-await page.waitForTimeout(300);
+await gameLoaded();
 await page.evaluate(() => document.querySelectorAll('.ml-choices .ml-btn').forEach((b) => b.click()));
-await page.waitForTimeout(500);
+await until(async () => (await idb()).length > 0);
 let rows = await idb();
 check(rows.length > 0 && rows.every((r) => r.who === first), 'attempts carry who=first');
 // old attempt without who belongs to the first profile
@@ -66,7 +68,7 @@ await page.waitForSelector('.hub-tile');
 await page.click('#ml-profile');
 await page.fill('#ml-profiles .ml-padd input', 'Zoé');
 await page.click('#ml-profiles .ml-padd .ml-btn');
-await page.waitForTimeout(200);
+await until(async () => JSON.parse((await ls('ml:profiles')) || '[]').length === 2);
 const profiles1 = JSON.parse(await ls('ml:profiles'));
 check(profiles1.length === 2 && profiles1[1].name === 'Zoé', 'profile added');
 const second = profiles1[1].id;
@@ -77,16 +79,16 @@ await page.keyboard.press('Escape');
 const visible = await core('storage', 'return [(await m.getAttempts()).length, (await m.getAttempts({ who: "*" })).length];');
 check(Array.isArray(visible) && visible[0] === 0 && visible[1] >= 2, 'getAttempts is per profile: ' + JSON.stringify(visible));
 await page.goto(base + 'play-the-note/');
-await page.waitForTimeout(300);
+await gameLoaded();
 check((await ls('ml:settings:play-the-note')) && JSON.parse(await ls('ml:settings:play-the-note')).level === 3, 'first profile settings untouched');
 check((await ls(`ml:psettings:${second}:play-the-note`)) == null, 'second profile has its own (empty) settings');
 await page.goto(base + 'play-the-note/?level=2');
 check(JSON.parse(await ls(`ml:psettings:${second}:play-the-note`)).level === 2, 'level saved under second profile');
 check(JSON.parse(await ls('ml:settings:play-the-note')).level === 3, 'legacy key still first profile');
 await page.goto(base + 'find-a-note/');
-await page.waitForTimeout(300);
+await gameLoaded();
 await page.evaluate(() => document.querySelectorAll('.ml-choices .ml-btn').forEach((b) => b.click()));
-await page.waitForTimeout(500);
+await until(async () => (await idb()).some((r) => r.who === second));
 rows = await idb();
 check(rows.some((r) => r.who === second), 'attempt carries who=second');
 // export: keeps who and name
@@ -99,12 +101,12 @@ await page.goto(base);
 await page.waitForSelector('.hub-tile');
 await page.click('#ml-profile');
 await page.click('#ml-profiles .ml-profiles .ml-prow:nth-child(1) .ml-chip');
-await page.waitForTimeout(200);
+await until(async () => (await ls('ml:profile')) === first);
 check((await ls('ml:profile')) === first, 'switch back');
 await page.click('#ml-profiles .ml-profiles .ml-prow:nth-child(2) .ml-del');
 check(JSON.parse(await ls('ml:profiles')).length === 2, 'delete needs confirmation');
 await page.click('#ml-profiles .ml-confirm .ml-btn:first-of-type');
-await page.waitForTimeout(300);
+await until(async () => JSON.parse((await ls('ml:profiles')) || '[]').length === 1);
 check(JSON.parse(await ls('ml:profiles')).length === 1, 'profile deleted after confirmation');
 rows = await idb();
 check(!rows.some((r) => r.who === second), 'deleted profile attempts erased');
@@ -153,7 +155,7 @@ if (dir) await page.screenshot({ path: dir + '/home-fr-light.png' });
 // first tile: the click opens the game at that level
 const target = await page.$eval('.hub-step[href*="level="]', (a) => a.getAttribute('href'));
 await page.click(`.hub-step[href="${target}"]`);
-await page.waitForTimeout(500);
+await until(async () => JSON.parse((await ls('ml:settings:' + target.split('/')[1])) || '{}').level === +target.split('level=')[1]);
 const gid = target.split('/')[1], lvl = +target.split('level=')[1];
 check(JSON.parse((await ls('ml:settings:' + gid)) || '{}').level === lvl, `tile opens ${gid} at level ${lvl}`);
 
@@ -180,13 +182,15 @@ const other = (id, name, n0) => ({ app: 'music-learnin', kind: 'results', format
 writeFileSync(tmp + '/leo.json', JSON.stringify(other('leo123', 'Léo', 'a')));
 writeFileSync(tmp + '/mia.json', JSON.stringify(other('mia456', 'Mia', 'b')));
 const importFile = async (file, answer) => {
+  const n0 = (await idb()).length;
   await page.click('.ml-icon:last-of-type');
   const [fc] = await Promise.all([page.waitForEvent('filechooser'), page.click('.ml-settings .ml-data button:nth-child(4)')]);
   await fc.setFiles(file);
   await page.waitForSelector('.ml-ask');
   const labels = await page.$$eval('.ml-ask .ml-btn', (b) => b.map((x) => x.textContent));
   await page.click(`.ml-ask .ml-btn:nth-of-type(${answer})`);
-  await page.waitForTimeout(500);
+  await page.waitForSelector('.ml-ask', { state: 'detached' });
+  await until(async () => (await idb()).length > n0);
   if (await page.$('.ml-settings[open]:not(.ml-ask)')) await page.keyboard.press('Escape');
   return labels;
 };
@@ -235,6 +239,179 @@ check(!(await page.evaluate(() => document.body.innerText.includes('null'))) , '
   if (dir) await p2.screenshot({ path: dir + '/home-en-dark.png' });
   await en.close();
 }
+// ======================= second part: each block runs in its own fresh context (no shared state with the part above) =======================
+const coreOn = (pg, mod, body, arg = null) => pg.evaluate(`(async (arg) => { const m = await import('/@fs${ROOT}/packages/core/${mod}.js'); ${body} })(${JSON.stringify(arg)})`);
+const fresh = async (opts = {}) => {
+  const c = await browser.newContext({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR', acceptDownloads: true, ...opts });
+  const pg = await c.newPage();
+  pg.on('pageerror', (e) => errors.push(String(e)));
+  pg.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await pg.goto(base);
+  await pg.waitForSelector('.hub-tile', { timeout: scaled(15000) });
+  await readAttempts(pg, null); // the home page has opened its database: from here IndexedDB can be read and written
+  return pg;
+};
+const resultsFile = (id, name, n, tag, extra = {}) => ({ app: 'music-learnin', kind: 'results', format: 1, device: 'zz', exported: Date.now(), game: null,
+  ...(id ? { profile: { id, name, hue: 120 }, profiles: [{ id, name, hue: 120 }] } : {}),
+  attempts: Array.from({ length: n }, (_, i) => ({ id: `${tag}${i}`, t: Date.now() - i * 1000, dev: 'zz', ...(id ? { who: id } : {}), game: 'find-a-note', skill: 'read.treble.staff', ok: i % 2 === 0, ms: 700, level: 1, item: 'C4', detail: null })), ...extra });
+
+// ---- 7. import modes: keep / new / merge / cancel, and the export round trip
+{
+  const pg = await fresh();
+  const me = await coreOn(pg, 'profiles', 'return m.activeId();');
+  const owners = async () => { const rows = await readAttempts(pg, null); const o = {}; rows.forEach((r) => { const w = r.who ?? 'none'; o[w] = (o[w] || 0) + 1; }); return o; };
+  // keep, profile already known here: no question, attempts keep their owner, a second import adds nothing
+  const ana = await coreOn(pg, 'profiles', `return m.addProfile('Ana', { hue: 40 });`);
+  const fKnown = resultsFile(ana.id, 'Ana', 4, 'k');
+  check(await coreOn(pg, 'transfer', 'return m.inspectResults(arg).needsChoice;', fKnown) === false, 'import: known profile needs no question');
+  let r = await coreOn(pg, 'transfer', `const r = await m.applyPayload(arg); return { added: r.added, skipped: r.skipped };`, fKnown);
+  check(r.added === 4 && r.skipped === 0, 'import keep: added 4 ' + JSON.stringify(r));
+  r = await coreOn(pg, 'transfer', `const r = await m.applyPayload(arg); return { added: r.added, skipped: r.skipped };`, fKnown);
+  check(r.added === 0 && r.skipped === 4, 'import keep twice: duplicates skipped ' + JSON.stringify(r));
+  check((await owners())[ana.id] === 4 && (await coreOn(pg, 'profiles', 'return m.activeId();')) === me, 'import keep: owner kept, active profile unchanged');
+  // keep, unknown profile in the file: the profile is added with its name, nobody is switched
+  const fUnknown = resultsFile('zed999', 'Zed', 3, 'u');
+  check(await coreOn(pg, 'transfer', 'return m.inspectResults(arg).needsChoice;', fUnknown) === true, 'import: unknown profile asks');
+  await coreOn(pg, 'transfer', 'await m.applyPayload(arg, { mode: "keep" });', fUnknown);
+  check(JSON.parse(await pg.evaluate(() => localStorage.getItem('ml:profiles'))).some((x) => x.id === 'zed999' && x.name === 'Zed') && (await coreOn(pg, 'profiles', 'return m.activeId();')) === me, 'import keep (unknown): profile added, active unchanged');
+  // new: an old file without profile while another profile is active -> asks; "new" creates a profile, switches to it and gives it the attempts
+  await coreOn(pg, 'profiles', `m.setActive(arg);`, ana.id);
+  const old = resultsFile(null, '', 2, 'o');
+  const insp = await coreOn(pg, 'transfer', 'return m.inspectResults(arg);', old);
+  check(insp.needsChoice && insp.ambiguous, 'import: old file with another profile active asks ' + JSON.stringify(insp));
+  await coreOn(pg, 'transfer', 'await m.applyPayload(arg, { mode: "new" });', old);
+  const after = await coreOn(pg, 'profiles', 'return [m.activeId(), m.listProfiles().length];');
+  check(after[0] !== ana.id && after[0] !== me && (await owners())[after[0]] === 2, 'import new: attempts belong to the added profile, which is now active ' + JSON.stringify(after));
+  // merge: everything goes to the active profile, no profile added
+  const nProf = (await coreOn(pg, 'profiles', 'return m.listProfiles().length;'));
+  await coreOn(pg, 'transfer', 'await m.applyPayload(arg, { mode: "merge" });', resultsFile('mia777', 'Mia', 5, 'm'));
+  check((await coreOn(pg, 'profiles', 'return m.listProfiles().length;')) === nProf && (await owners())[after[0]] === 7, 'import merge: 5 more attempts for the active profile, no new profile');
+  // wrong files are refused
+  const bad = await coreOn(pg, 'transfer', `try { await m.applyPayload({ app: 'other', kind: 'results', format: 1 }); return 'accepted'; } catch (e) { return e.message; }`);
+  check(bad === 'bad-file', 'import: foreign file refused: ' + bad);
+  const newer = await coreOn(pg, 'transfer', `try { await m.applyPayload({ app: 'music-learnin', kind: 'results', format: 999, attempts: [] }); return 'accepted'; } catch (e) { return e.message; }`);
+  check(newer === 'bad-file', 'import: file from a newer format refused: ' + newer);
+  // the dialog: three buttons, the third one cancels and changes nothing
+  await coreOn(pg, 'profiles', `m.setActive(arg);`, me);
+  const tmp2 = mkdtempSync(tmpdir() + '/pf2-');
+  writeFileSync(tmp2 + '/cancel.json', JSON.stringify(resultsFile('cancel1', 'Nina', 3, 'c')));
+  await pg.goto(base);
+  await pg.waitForSelector('.hub-tile');
+  const nBefore = (await readAttempts(pg, null)).length;
+  await pg.click('.ml-icon:last-of-type');
+  const [fc] = await Promise.all([pg.waitForEvent('filechooser'), pg.click('.ml-settings .ml-data button:nth-child(4)')]);
+  await fc.setFiles(tmp2 + '/cancel.json');
+  await pg.waitForSelector('.ml-ask');
+  const labs = await pg.$$eval('.ml-ask .ml-btn', (b) => b.map((x) => x.textContent));
+  check(labs.length === 3 && /Annuler/.test(labs[2]), 'import dialog: cancel button ' + labs);
+  await pg.click('.ml-ask .ml-btn:nth-of-type(3)');
+  await pg.waitForSelector('.ml-ask', { state: 'detached' });
+  check((await readAttempts(pg, null)).length === nBefore && !JSON.parse(await pg.evaluate(() => localStorage.getItem('ml:profiles'))).some((x) => x.id === 'cancel1'), 'import cancel: nothing imported, no profile added');
+  // export: the download holds the active profile only; re-importing it adds nothing
+  await pg.keyboard.press('Escape');
+  await pg.click('.ml-icon:last-of-type');
+  const [dl] = await Promise.all([pg.waitForEvent('download'), pg.click('.ml-settings .ml-data button:nth-child(3)')]);
+  const saved = tmp2 + '/export.json';
+  await dl.saveAs(saved); // a shared (remote) Chrome has no local path
+  const exported = JSON.parse(readFileSync(saved, 'utf8'));
+  const mine = (await readAttempts(pg, null)).filter((x) => (x.who ?? me) === me).length;
+  check(exported.app === 'music-learnin' && exported.kind === 'results' && exported.attempts.length === mine && exported.attempts.every((x) => x.who === me), `export: ${exported.attempts.length} attempts, expected ${mine}, all of the active profile`);
+  check(/^music-learnin-results-all/.test(dl.suggestedFilename()), 'export file name ' + dl.suggestedFilename());
+  r = await coreOn(pg, 'transfer', `const r = await m.applyPayload(arg); return { added: r.added };`, exported);
+  check(r.added === 0, 'export then import: nothing added');
+  await pg.context().close();
+}
+
+// ---- 8. guided path "Aujourd'hui": each tile links to the game level that trains the skill
+{
+  const pg = await fresh();
+  const now = Date.now();
+  const skills = [['play.scales', 'play-scales', 4], ['read.treble.staff', 'find-a-note', 1], ['sing.match', 'sing-match', 2], ['rhythm.pulse', 'tap-rhythm', 1], ['listen.intervals.basic', 'ear-intervals', 2]];
+  const rows = [];
+  skills.forEach(([skill, game, level], k) => { for (let i = 0; i < 8; i++) rows.push({ id: `gp${k}_${i}`, t: now - (k * 3 + i) * 3600000, dev: 'zz', who: undefined, game, skill, ok: i % 3 !== 0, ms: 900, level, item: 'x' + (i % 4), detail: null }); });
+  await coreOn(pg, 'transfer', `await m.applyPayload(arg);`, { app: 'music-learnin', kind: 'results', format: 1, attempts: rows });
+  await pg.reload();
+  await pg.waitForSelector('.hub-step');
+  const tiles = await pg.$$eval('.hub-step', (a) => a.map((x) => ({ href: x.getAttribute('href'), why: x.querySelector('.hub-why')?.textContent })));
+  const want = await coreOn(pg, 'path', `const s = await import('/@fs${ROOT}/packages/core/storage.js'); return m.nextSteps(await s.getAttempts(), { count: 4 });`);
+  const gamesDef = await coreOn(pg, 'taxonomy', 'return m.GAMES.map((g) => [g.id, g.levels || null]);');
+  const lv = Object.fromEntries(gamesDef);
+  check(tiles.length === want.length && tiles.length >= 3, `path: ${tiles.length} tiles for ${want.length} steps`);
+  want.forEach((st, i) => {
+    const t = tiles[i];
+    check(t && t.href === `./${st.game}/${st.level ? '?level=' + st.level : ''}`, `path tile ${i}: href ${t && t.href} for ${st.game} level ${st.level}`);
+    if (st.level) {
+      check(lv[st.game] && lv[st.game][st.level - 1] === st.skill, `path tile ${i}: level ${st.level} of ${st.game} trains ${lv[st.game] && lv[st.game][st.level - 1]}, not ${st.skill}`);
+      check(t && new RegExp(`niveau ${st.level}$`, 'i').test(t.why), `path tile ${i}: label "${t && t.why}" shows level ${st.level}`);
+    } else check(!lv[st.game] || !lv[st.game].includes(st.skill), `path tile ${i}: ${st.game} has a level for ${st.skill} but the link has none`);
+  });
+  // one tile per game and per domain, and the click saves that level for the active profile
+  check(new Set(tiles.map((t) => t.href.split('/')[1])).size === tiles.length, 'path: a game twice');
+  const first = tiles.find((t) => t.href.includes('?level='));
+  if (first) {
+    await pg.click(`.hub-step[href="${first.href}"]`);
+    await pg.waitForFunction(() => window.__test || document.querySelector('.ml-title'), null, { timeout: scaled(15000) });
+    const [g, l] = [first.href.split('/')[1], +first.href.split('level=')[1]];
+    check(JSON.parse(await pg.evaluate((g) => localStorage.getItem('ml:settings:' + g), g) || '{}').level === l, `path click: ${g} saved at level ${l}`);
+  }
+  // English heading and wording
+  await pg.context().close();
+}
+
+// ---- 9. settings and feedback mode per profile, through the settings dialog of a game
+{
+  const pg = await openGame(browser, 'play-the-note', { level: 3, lang: 'fr' });
+  const lsGet = (k) => pg.evaluate((k) => localStorage.getItem(k), k);
+  const first = await coreOn(pg, 'profiles', 'return m.activeId();');
+  const second = await coreOn(pg, 'profiles', `return m.addProfile('Bea', { activate: true }).id;`);
+  await pg.reload();
+  await waitIdle(pg).catch(() => {});
+  await pg.waitForFunction(() => document.querySelector('.ml-title')?.textContent, null, { timeout: scaled(15000) });
+  const openSettings = async () => { await pg.click('.ml-bar button:has-text("⚙")'); await pg.waitForSelector('dialog.ml-settings[open]'); };
+  await openSettings();
+  const levelSel = pg.locator('dialog.ml-settings .ml-field:has(> span:text-matches("^(Niveau|Level)$")) select');
+  check((await levelSel.inputValue()) === '1', 'second profile starts at level 1 (default), not at the first profile level: ' + (await levelSel.inputValue()));
+  await levelSel.selectOption('2');
+  check(JSON.parse(await lsGet(`ml:psettings:${second}:play-the-note`)).level === 2, 'dialog: level saved under the second profile');
+  check(JSON.parse(await lsGet('ml:settings:play-the-note')).level === 3, 'dialog: first profile level untouched');
+  await pg.selectOption('.ml-fb-mode select', 'silent');
+  check(JSON.parse(await lsGet(`ml:psettings:${second}:_feedback`)).mode === 'silent' && (await lsGet('ml:settings:_feedback')) === null, 'dialog: feedback mode saved for the second profile only');
+  check((await pg.evaluate(() => document.documentElement.dataset.fb)) === 'silent', 'dialog: mode applied at once');
+  await pg.keyboard.press('Escape');
+  // back to the first profile: its own level and the default mode
+  await coreOn(pg, 'profiles', 'm.setActive(arg);', first);
+  await pg.reload();
+  await pg.waitForFunction(() => document.querySelector('.ml-title')?.textContent, null, { timeout: scaled(15000) });
+  check((await pg.evaluate(() => document.documentElement.dataset.fb)) === 'normal', 'first profile: feedback mode normal');
+  await openSettings();
+  check((await pg.locator('dialog.ml-settings .ml-field:has(> span:text-matches("^(Niveau|Level)$")) select').inputValue()) === '3', 'first profile: level 3 back');
+  await pg.keyboard.press('Escape');
+  // and the second one again
+  await coreOn(pg, 'profiles', 'm.setActive(arg);', second);
+  await pg.reload();
+  await pg.waitForFunction(() => document.querySelector('.ml-title')?.textContent, null, { timeout: scaled(15000) });
+  check((await pg.evaluate(() => document.documentElement.dataset.fb)) === 'silent', 'second profile: feedback mode silent after reload');
+  // a query level applies to the active profile only
+  await pg.goto(base + 'play-the-note/?level=4');
+  check(JSON.parse(await lsGet(`ml:psettings:${second}:play-the-note`)).level === 4 && JSON.parse(await lsGet('ml:settings:play-the-note')).level === 3, '?level= goes to the active profile');
+  check(pg.errors.length === 0, 'settings per profile: console ' + pg.errors.join(' | '));
+  await pg.context().close();
+}
+
+// ---- 10. update toast (English), once, accessible, reloads on click
+{
+  const pg = await fresh({ locale: 'en-US' });
+  await coreOn(pg, 'update', 'm._showUpdateToast(); m._showUpdateToast();');
+  check((await pg.locator('.ml-update').count()) === 1, 'update toast: shown once');
+  check((await pg.textContent('.ml-update')) === 'New version · reload' && (await pg.getAttribute('.ml-update', 'role')) === 'status', 'update toast: text/role');
+  const box = await pg.$eval('.ml-update', (b) => { const r = b.getBoundingClientRect(); return [r.width, r.height, r.left >= 0 && r.right <= innerWidth]; });
+  check(box[1] >= 32 && box[2], 'update toast: tap target and inside the screen ' + box);
+  await Promise.all([pg.waitForEvent('load'), pg.click('.ml-update')]);
+  await pg.waitForSelector('.hub-tile');
+  check((await pg.locator('.ml-update').count()) === 0, 'update toast: gone after the reload');
+  await pg.context().close();
+}
+
 check(!errors.length, 'console: ' + errors.join(' | '));
 await browser.close();
 console.log(failed ? `${failed} failure(s)` : 'all good');

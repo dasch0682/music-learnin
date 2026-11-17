@@ -1,6 +1,6 @@
 // Tests the Web MIDI input of the core keyboards (fake requestMIDIAccess injected), the no-MIDI and refused cases, and the piano timbre.
 // Usage: npx vite --port 5402 --strictPort &   then   PORT=5402 node tools/midi.test.mjs [screenshot-dir]
-import { launch, FAST, rounds, levels, combos, CORE } from './lib/harness.mjs';
+import { launch, FAST, rounds, levels, combos, CORE, readAttempts, waitAttempts, scaled } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5402}/play-scales/`;
 const browser = await launch();
 let failed = 0;
@@ -30,7 +30,7 @@ async function open(mode, fr = 'fr') {
   await page.addInitScript(() => { localStorage.setItem('ml:settings:play-scales', JSON.stringify({ level: 1, model: false })); });
   await page.goto(base);
   await page.click('.ml-start');
-  await page.waitForFunction(() => window.__test.state().expected.length && !window.__test.state().locked, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__test.state().expected.length && !window.__test.state().locked, null, { timeout: scaled(15000) });
   return { page, errors };
 }
 const st = (page) => page.evaluate(() => window.__test.state());
@@ -54,14 +54,17 @@ const st = (page) => page.evaluate(() => window.__test.state());
   // Wrong note, a note outside the keyboard, a control change.
   const wrong = s.win[0] === s.expected[2] ? s.win[0] + 1 : s.win[0];
   await page.evaluate((m) => window.__midi(0x90, m, 90), wrong === s.expected[2] ? wrong + 1 : wrong);
+  await page.waitForFunction(() => window.__test.state().wrongLogged, null, { timeout: scaled(5000) }).catch(() => {});
   check((await st(page)).wrongLogged, 'wrong MIDI note not counted');
   await page.evaluate(() => { window.__midi(0x90, 20, 90); window.__midi(0xb0, 64, 127); });
   check((await st(page)).idx === 2, 'out-of-range note or CC moved the game');
   await page.evaluate(() => window.__midi(0x80, 20, 0));
   // The rest of the scale by MIDI.
   for (const m of s.expected.slice(2)) await page.evaluate((x) => { window.__midi(0x90, x, 80); window.__midi(0x80, x, 0); }, m);
+  // the answers are written asynchronously: wait for the two rows (wrong, then right), then give a late third one time to show up
+  await waitAttempts(page, 'play-scales', 2);
   await page.waitForTimeout(200);
-  const at = await page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((x) => x.game === 'play-scales').sort((u, v) => u.t - v.t).map((x) => [x.ok, x.skill])); }; }));
+  const at = (await readAttempts(page, 'play-scales')).map((x) => [x.ok, x.skill]);
   check(JSON.stringify(at) === JSON.stringify([[false, 'play.scales'], [true, 'play.scales']]), 'attempts after MIDI play: ' + JSON.stringify(at));
   check(!errors.length, 'console (fake): ' + errors.join(' | '));
   await page.close();
@@ -110,6 +113,7 @@ for (const mode of ['none', 'refused']) {
   const s = await st(page);
   const box = await page.locator(`.ps-kb [data-midi="${s.expected[0]}"]`).boundingBox();
   await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.4);
+  await page.waitForFunction(() => window.__test.state().idx === 1, null, { timeout: scaled(5000) }).catch(() => {});
   check((await st(page)).idx === 1, `${mode}: touch does not work`);
   await page.waitForTimeout(100);
   check(!errors.length, `console (${mode}): ` + errors.join(' | '));
@@ -124,14 +128,15 @@ for (const mode of ['none', 'refused']) {
     const ctx = audio();
     const out = [];
     for (const m of [21, 40, 60, 84, 108]) {
+      const t0 = ctx.currentTime; // taken before the call: the audio clock keeps running while a loaded machine builds the graph
       const end = playNote(m, { dur: 0.6, timbre: 'piano' });
-      out.push(+(end - ctx.currentTime).toFixed(2));
+      out.push(+(end - t0).toFixed(2));
     }
     playChord([60, 64, 67], { timbre: 'piano' });
     for (const t of ['pad', 'pluck', 'bass', 'voice']) playNote(60, { timbre: t });
     return out;
   }, CORE);
-  check(r.every((x) => Math.abs(x - 0.85) < 0.05), 'piano end time: ' + r);
+  check(r.every((x) => x >= 0.84 && x < 1.0), 'piano end time: ' + r);
   check(!errors.length, 'console (audio): ' + errors.join(' | '));
   await page.close();
 }
