@@ -12,7 +12,7 @@ const L = (en, fr) => ({ en, fr });
 const MAX_LEVEL = 11;
 const game = createGame({
   id: 'second-voice',
-  title: L('Second voice', 'Deuxième voix'),
+  title: L('Sing a second voice', 'Chante une 2e voix'),
   strings: {
     noMic: L('The microphone is not available. Allow it, then try again.', 'Le micro n’est pas disponible. Autorise-le, puis réessaie.'),
     retry: L('Try again', 'Réessayer'),
@@ -134,13 +134,25 @@ function staged(stages, stats, key = (k) => k) {
 // The app never sounds the note the singer has to find: the singer completes the chord.
 // (It also keeps the microphone from taking the app's voice for the singer's.)
 const chordOther = (c, sung) => [...new Set([c.root - 12, ...c.tones.map((x) => x - 12)])].filter((x) => mod(x - sung, 12) !== 0);
-// Moves notes by octaves. Without `below`: up to at least 41. With `below` (a bass, the lowest sung note of its step):
-// up only while it stays under that note, then down an octave at a time until it is strictly under it.
-function place(notes, below = null) {
-  let n = notes;
-  while (Math.min(...n) < 41 && (below === null || Math.max(...n) + 12 < below)) n = n.map((x) => x + 12);
-  if (below !== null) while (Math.max(...n) >= below) n = n.map((x) => x - 12);
-  return n;
+function place(notes) { let n = notes; while (Math.min(...n) < 41) n = n.map((x) => x + 12); return n; }
+// Bass: the lowest pitch allowed, and where each bass note goes for a step (absolute MIDI).
+const BASS_LOW = 36;
+// Highest pitch with pitch class pc, strictly under `top` and at least BASS_LOW; null if none.
+function under(pc, top) { for (let x = top - 1; x >= BASS_LOW; x--) if (mod(x, 12) === mod(pc, 12)) return x; return null; }
+// Each bass note takes its highest octave under the step's lowest sung note. If none fits, it takes the highest
+// fitting chord tone (root, third or fifth) instead. If nothing fits, the note is dropped: an empty list is a rest.
+function bassPlace(notes, sung, chordTones) {
+  const top = Math.min(...sung);
+  const out = new Set();
+  for (const p of notes) {
+    let x = under(p, top);
+    if (x === null) {
+      const fits = chordTones.map((c) => under(c, top)).filter((v) => v !== null);
+      if (fits.length) x = Math.max(...fits);
+    }
+    if (x !== null) out.add(x);
+  }
+  return [...out];
 }
 const near = (a, b) => mod(a - b + 6, 12) - 6; // signed distance, any octave
 
@@ -335,7 +347,8 @@ async function build(level, voice = game.settings.voice) {
   const tonic = keys.length ? pick(keys) : Math.round((lo + hi) / 2 - (min + max) / 2);
   for (const s of steps) {
     s.targets = s.targets.map((x) => tonic + x);
-    s.other = place(s.other.map((x) => tonic + x), level <= 2 ? null : Math.min(...s.targets));
+    const other = s.other.map((x) => tonic + x);
+    s.other = level <= 2 ? place(other) : bassPlace(other, s.targets, s.chord ? s.chord.tones.slice(0, 3).map((x) => tonic + x) : []);
   }
   return {
     level, skill, item, name, steps, demo, tonic, center: tonic + (min + max) / 2,

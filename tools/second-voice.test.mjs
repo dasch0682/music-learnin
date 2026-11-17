@@ -16,14 +16,16 @@ const listening = async () => { for (let i = 0; i < 200; i++) { const s = await 
 const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'second-voice').sort((x, y) => x.t - y.t)); }; }));
 
 await page.goto(base);
-// 0. Bass: in every voice setting and level, each bass note sounds strictly below every sung note of its step.
+// 0. Bass: in every voice setting and level, each bass note is at least C2 (36) and sounds strictly below
+// the lowest sung note of its step. An empty bass is a silent step, which passes.
 // Levels 1-2 are not bass levels: the app sings a moving voice above the held note there, by design.
 for (const voice of ['child', 'high', 'medium', 'low']) {
   for (let level = 3; level <= 11; level++) {
     const rounds = await page.evaluate(([l, v]) => window.__test.sample(l, v, 150), [level, voice]);
     let bad = 0, example = null;
     for (const steps of rounds) for (const st of steps) {
-      if (Math.max(...st.other) >= Math.min(...st.targets)) { bad++; example ??= JSON.stringify(st); }
+      const top = Math.min(...st.targets);
+      if (!st.other.every((b) => b >= 36 && b < top)) { bad++; example ??= JSON.stringify(st); }
     }
     check(rounds.length === 150 && bad === 0, `bass ${voice} L${level}: ${bad} step(s) with a bass note not below the sung note, e.g. ${example}`);
   }

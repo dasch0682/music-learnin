@@ -11,7 +11,7 @@ const L = (en, fr) => ({ en, fr });
 const SKILL = 'play.tunes';
 const game = createGame({
   id: 'known-tunes',
-  title: L('Tunes you know', 'Airs connus'),
+  title: L('Play a known tune', 'Joue un air connu'),
   strings: {
     replay: L('Listen again', 'Réécouter'),
     nextLevel: L('Level {n} →', 'Niveau {n} →'),
