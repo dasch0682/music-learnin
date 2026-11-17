@@ -1,10 +1,10 @@
 // Plays every level of Transpose: one wrong answer, then the right ones. Checks the theory and the drawing too.
 // Usage: npx vite --port 5305 --strictPort &   then   PORT=5305 node tools/score-reading.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const ID = 'score-reading';
 const base = `http://localhost:${process.env.PORT || 5305}/${ID}/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR', hasTouch: true });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -59,11 +59,11 @@ function checkHead(d, clef, n, where) {
 }
 
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await setup(level, 'fr', 'dark');
   const seen = new Set();
-  const rounds = level === 1 ? 10 : 8;
-  for (let round = 0; round < rounds; round++) {
+  const nRounds = level === 1 ? 10 : rounds(8, 2); // level 1 keeps its clean streak (next-level button)
+  for (let round = 0; round < nRounds; round++) {
     await ready();
     const s = await state();
     seen.add(s.item);

@@ -1,9 +1,9 @@
 // Plays every level of Find the note: one wrong name, then the right one. Recomputes the name from the MIDI number.
 // Usage: npx vite --port 5409 --strictPort &   then   PORT=5409 node tools/find-a-note.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5409}/find-a-note/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -37,13 +37,13 @@ const LEVELS = [
 ];
 
 await page.goto(base);
-for (let level = 1; level <= 7; level++) {
+for (const level of levels(7)) {
   const spec = LEVELS[level];
   await page.evaluate((l) => localStorage.setItem('ml:settings:find-a-note', JSON.stringify({ level: l, sound: false })), level);
   await page.reload();
   await page.waitForSelector('.ml-choices button');
   const seen = new Set(), clefs = new Set();
-  for (let round = 0; round < 14; round++) {
+  for (let round = 0; round < rounds(14, 2); round++) {
     await page.waitForFunction(() => window.__test.state() && !window.__test.state().locked && document.querySelector('.ml-choices button:not([disabled])'));
     const s = await page.evaluate(() => window.__test.state());
     seen.add(s.item); clefs.add(s.clef);
@@ -74,7 +74,7 @@ for (let level = 1; level <= 7; level++) {
     const exp = round === 0 ? [false, true] : [true];
     check(JSON.stringify(mine.map((a) => a.ok)) === JSON.stringify(exp) && mine.every((a) => a.level === level && a.item === s.item && a.skill === s.skill), `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.skill]))}`);
   }
-  if (level >= 6) check(clefs.size === spec.clefs.length || level === 6 && clefs.size >= 1, `L${level}: clefs ${[...clefs]}`);
+  if (level >= 6 && !FAST) check(clefs.size === spec.clefs.length || level === 6 && clefs.size >= 1, `L${level}: clefs ${[...clefs]}`);
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   console.log(`L${level}`, [...seen].join(' '));
 }

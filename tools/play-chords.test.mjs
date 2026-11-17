@@ -1,10 +1,10 @@
 // Plays every level of Play the chord with real pointer events on the keys: a wrong chord, then right ones.
 // Usage: npx vite --port 5303 --strictPort &   then   PORT=5303 node tools/play-chords.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const ID = 'play-chords';
 const base = `http://localhost:${process.env.PORT || 5303}/${ID}/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR', hasTouch: true });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -61,10 +61,10 @@ async function setup(level, lang, theme) {
 const settle = () => page.waitForFunction(() => { const s = window.__test.state(); return !s.locked && s.step === 0 && !s.latched.length; }, null, { timeout: 10000 }).catch(async (e) => { console.log('STATE', JSON.stringify(await state())); throw e; });
 
 await page.goto(base);
-for (let level = 1; level <= 7; level++) {
+for (const level of levels(7)) {
   await setup(level, 'fr', 'light');
   const seen = new Set();
-  for (let round = 0; round < 4; round++) {
+  for (let round = 0; round < rounds(4, 2); round++) {
     const s = await state();
     seen.add(s.item);
     const cad = level >= 6;

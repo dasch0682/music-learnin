@@ -1,10 +1,10 @@
 // Plays every level of Read the chord: one wrong answer, then the right one.
 // The expected answer is recomputed here from the notes shown (letters and semitones), not taken from the game.
 // Usage: npx vite --port 5306 --strictPort &   then   PORT=5306 node tools/read-chords.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5306}/read-chords/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const errors = [];
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
@@ -32,19 +32,19 @@ const expectedOf = (ask, c) => (ask === 'root' ? `${c.root.letter}:${c.root.acc}
 const ASKS = { 1: ['root'], 2: ['type'], 3: ['type'], 4: ['inv', 'root'], 5: ['type'], 6: ['full'] };
 const ROUNDS = { 1: 10, 2: 10, 3: 12, 4: 7, 5: 12, 6: 22 };
 
-for (const [scheme, locale] of [['light', 'fr-FR'], ['dark', 'en-US']]) {
+for (const [scheme, locale] of combos([['light', 'fr-FR'], ['dark', 'en-US']])) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 780 }, colorScheme: scheme, locale });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'read-chords').sort((x, y) => x.t - y.t)); }; }));
   await page.goto(base);
-  for (let level = 1; level <= 6; level++) {
+  for (const level of levels(6)) {
     await page.evaluate((l) => localStorage.setItem('ml:settings:read-chords', JSON.stringify({ level: l, sound: true })), level);
     await page.reload();
     await page.waitForFunction(() => window.__test?.state());
     const seen = new Set();
-    for (let round = 0; round < ROUNDS[level]; round++) {
+    for (let round = 0; round < rounds(ROUNDS[level], 2); round++) {
       for (const [phaseNo, ask] of ASKS[level].entries()) {
         const s = await page.evaluate(() => window.__test.state());
         const tag = `${scheme} L${level} round ${round} ${ask}`;
@@ -109,7 +109,7 @@ for (const [scheme, locale] of [['light', 'fr-FR'], ['dark', 'en-US']]) {
       }
     }
     const nextShown = await page.evaluate(() => document.querySelector('.rc-next').classList.contains('rc-show'));
-    check(nextShown === (level < 6), `${scheme} L${level}: next level button ${nextShown}`);
+    if (!FAST) check(nextShown === (level < 6), `${scheme} L${level}: next level button ${nextShown}`);
     check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `${scheme} L${level}: overflow`);
     check(!(await page.evaluate(() => document.documentElement.scrollHeight > innerHeight + 1)), `${scheme} L${level}: taller than the screen`);
     console.log(`${scheme} ${locale} L${level}`, [...seen].join(' '));

@@ -1,11 +1,11 @@
 // Plays every level of Tunes you know with real pointer events: a wrong key, then the right ones.
 // Usage: npx vite --port 5406 --strictPort &   then   PORT=5406 node tools/known-tunes.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 import { TUNES } from '../apps/known-tunes/tunes.js';
 const ID = 'known-tunes';
 const base = `http://localhost:${process.env.PORT || 5406}/${ID}/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR', hasTouch: true });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -71,11 +71,11 @@ async function setup(level, lang, theme) {
 const waitAnswer = (cond) => page.waitForFunction((c) => { const s = window.__test.state(); return s.state === 'answer' && (!c || (s.tune !== c.tune || s.phrase !== c.phrase)); }, cond || null, { timeout: 20000 });
 
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await setup(level, 'fr', 'light');
   await waitAnswer();
   const seen = new Set();
-  for (let t = 0; t < 2; t++) {
+  for (let t = 0; t < rounds(2, 1); t++) {
     let s = await state();
     const id = s.tune;
     seen.add(id);
@@ -131,7 +131,7 @@ for (let level = 1; level <= 6; level++) {
 // Each new tune, forced through the test hook at level 3 (whole tune, no transposition): every phrase, then a wrong key.
 await setup(3, 'en', 'light');
 await waitAnswer();
-for (const id of ['amazing-grace', 'pont-avignon', 'bon-tabac', 'alouette', 'greensleeves']) {
+for (const id of rounds(["amazing-grace", "pont-avignon", "bon-tabac", "alouette", "greensleeves"], ["amazing-grace", "greensleeves"])) {
   await page.evaluate((x) => window.__test.force(x), id);
   await page.waitForFunction((x) => { const s = window.__test.state(); return s.state === 'answer' && s.tune === x && s.phrase === 0; }, id, { timeout: 20000 });
   for (let p = 0; p < DEG[id].length; p++) {

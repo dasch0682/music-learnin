@@ -1,9 +1,9 @@
 // Plays every level of Sing it with injected pitches: leak ignored, wrong note counted once, right notes in another octave, skip.
 // Usage: npx vite --port 5409 --strictPort &   then   PORT=5409 node tools/sing-match.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5409}/sing-match/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch({ speed: 1 }); // microphone test: pitches are fed in real time (accelerated timers made it hang when run next to other microphone tests)
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'dark', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -58,8 +58,8 @@ const open = async (level, voice) => {
 
 await page.goto(base);
 const voices = ['child', 'high', 'medium', 'low'];
-for (let level = 1; level <= 5; level++) {
-  for (const pass of [0, 1]) {
+for (const level of levels(5)) {
+  for (const pass of rounds([0, 1], [0])) {
     const voice = voices[(level + pass * 2) % 4];
     const tag = `L${level}/${voice}`;
     await open(level, voice);

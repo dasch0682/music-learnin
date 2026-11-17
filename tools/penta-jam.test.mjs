@@ -1,9 +1,9 @@
 // Plays every level of Five-note jam: one wrong phrase, then right ones. Taps are timed on the backing clock.
 // Usage: npx vite --port 5407 --strictPort &   then   PORT=5407 node tools/penta-jam.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5407}/penta-jam/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch({ speed: 1 }); // taps are timed against the real clock
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'dark', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -91,7 +91,7 @@ const chordPlan = async (s, ok) => {
 plans[3] = plans[4] = plans[8] = chordPlan;
 
 await page.goto(base);
-for (const L of [1, 2, 3, 4, 5, 6, 7, 8, 9, '5b']) {
+for (const L of FAST ? [1, 5, 9] : [1, 2, 3, 4, 5, 6, 7, 8, 9, '5b']) {
   const level = parseInt(L);
   if (process.env.ONLY && !process.env.ONLY.split(',').includes(String(L))) continue;
   if (L === '5b') { await page.reload(); await page.click('.ml-start'); await page.waitForFunction(() => window.__test?.running); }
@@ -106,7 +106,7 @@ for (const L of [1, 2, 3, 4, 5, 6, 7, 8, 9, '5b']) {
   const before = (await attempts()).length;
   const lv = await page.evaluate(() => window.__test.level);
   check(lv === level, `L${level}: level is ${lv}`);
-  const phrases = level === 5 ? 4 : 3;
+  const phrases = rounds(level === 5 ? 4 : 3, 2);
   const expected = [];
   for (let p = 0; p < phrases; p++) {
     const s = await page.evaluate((i) => window.__test.spec(i), p);

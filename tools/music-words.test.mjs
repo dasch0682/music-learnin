@@ -1,9 +1,9 @@
 // Plays every level of Music words: a wrong answer, then right ones. Recomputes the sound parameters of each question.
 // Usage: PORT=5405 node tools/music-words.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5405}/music-words/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -67,14 +67,14 @@ function verify(level, s) {
 }
 
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:music-words', JSON.stringify({ level: l })), level);
   await page.reload();
   await page.click('.ml-start');
   await page.waitForTimeout(300);
   const items = LEVELS[level], seen = new Set(), modes = new Set();
-  const rounds = items.length * (level === 4 || level === 6 ? 2 : 1) + 1;
-  for (let round = 0; round < rounds; round++) {
+  const nRounds = rounds(items.length * (level === 4 || level === 6 ? 2 : 1) + 1, 2);
+  for (let round = 0; round < nRounds; round++) {
     const s = await page.evaluate(() => window.__test.state());
     seen.add(s.item); modes.add(s.mode);
     check(s.level === level, `L${level}: level ${s.level}`);

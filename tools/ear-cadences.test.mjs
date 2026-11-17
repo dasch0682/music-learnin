@@ -1,9 +1,9 @@
 // Plays every level of Cadences by ear: one wrong answer, then the right one. Checks the chords too.
 // Usage: npx vite --port 5220 --strictPort &   then   PORT=5220 node tools/ear-cadences.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5220}/ear-cadences/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -12,13 +12,13 @@ let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
 const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'ear-cadences').sort((x, y) => x.t - y.t)); }; }));
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:ear-cadences', JSON.stringify({ level: l, tempo: 110 })), level);
   await page.reload();
   await page.click('.ml-start');
   await page.waitForTimeout(300);
   const seen = new Set();
-  for (let round = 0; round < 8; round++) {
+  for (let round = 0; round < rounds(8, 2); round++) {
     const s = await page.evaluate(() => window.__test.state());
     seen.add(s.item);
     check(s.chords.every((c) => c.length >= 4 && c.every((m) => m >= 43 && m < 69)), `L${level}: chord out of range ${JSON.stringify(s.chords)}`);

@@ -1,10 +1,10 @@
 // Plays every level of Harmony lab: a wrong answer, then the right one. Valid answers are recomputed from theory
 // (pitch classes of the chords), never read back from the app's own tables.
 // Usage: npx vite --port 5308 --strictPort &   then   PORT=5308 node tools/harmony-lab.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5308}/harmony-lab/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -126,14 +126,14 @@ async function clickBlock(s, id) {
 }
 
 await page.goto(base);
-for (let level = 1; level <= 8; level++) {
+for (const level of levels(8)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:harmony-lab', JSON.stringify({ level: l, tempo: 110 })), level);
   await page.reload();
   await page.click('.ml-start');
   await page.waitForTimeout(400);
   const seen = new Set();
-  const rounds = level >= 7 ? 9 : level === 5 ? 8 : 6;
-  for (let round = 0; round < rounds; round++) {
+  const nRounds = rounds(level >= 7 ? 9 : level === 5 ? 8 : 6, 2);
+  for (let round = 0; round < nRounds; round++) {
     const s = await st();
     seen.add(s.item.split(':')[0]);
     check(s.level === level, `L${level}: level ${s.level}`);

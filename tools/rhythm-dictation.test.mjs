@@ -1,9 +1,9 @@
 // Plays every level of Write the rhythm: a wrong bar (twice at round 1), then the right one. Recomputes the rules from the item id.
 // Usage: npx vite --port 5404 --strictPort &   then   PORT=5404 node tools/rhythm-dictation.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5404}/rhythm-dictation/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -62,13 +62,13 @@ async function enter(list) { for (const id of list) await page.click(btn(id)); }
 async function settle() { await page.waitForFunction(() => window.__test.state().marks); }
 
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:rhythm-dictation', JSON.stringify({ level: l, tempo: 120 })), level);
   await page.reload();
   await page.click('.ml-start');
   await page.waitForTimeout(300);
   const seen = new Set();
-  for (let round = 0; round < ROUNDS[level]; round++) {
+  for (let round = 0; round < rounds(ROUNDS[level], 3); round++) {
     const s = await state();
     seen.add(s.item); if (process.env.V) console.log(level, round, s.item);
     rules(level, s);

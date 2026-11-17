@@ -1,10 +1,10 @@
 // Plays every level of Sight-singing with injected pitches: wrong note, then the melody sung in tune.
 // Also checks the written melodies against music theory (key, intervals, accidentals) and the voice setting.
 // Usage: npx vite --port 5309 --strictPort &   then   PORT=5309 node tools/sight-sing.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5309}/sight-sing/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch({ speed: 1 }); // microphone test: pitches are fed in real time (accelerated timers made it hang when run next to other microphone tests)
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'dark', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -68,12 +68,13 @@ function theory(s, level, voice) {
 }
 
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await setup(level);
-  const before = (await attempts()).length;
   // The first note is played by the app: nothing sung into the microphone counts meanwhile.
   let s0 = await state();
   for (let i = 0; i < 50 && !s0.notes; i++) { await page.waitForTimeout(100); s0 = await state(); }
+  // (read the log only once the app is up: opening IndexedDB before the app creates its stores leaves an empty database and hangs under load)
+  const before = (await attempts()).length;
   if (!s0.listening) {
     await feed(s0.notes[0].midi + 3, 800);
     s0 = await state();
@@ -107,7 +108,7 @@ for (let level = 1; level <= 6; level++) {
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   console.log(`L${level}`, mine.map((a) => `${a.skill} ${a.item} ${a.ok}`).join(' | '));
   // 3. Sample other melodies of the level (Skip logs a miss and draws the next one).
-  for (let k = 0; k < 14; k++) {
+  for (let k = 0; k < rounds(14, 4); k++) {
     await page.click('.ss-skip');
     await page.waitForTimeout(150);
     const t = await state();
@@ -115,7 +116,7 @@ for (let level = 1; level <= 6; level++) {
   }
 }
 // Voice setting: the melody moves by octaves, the clef follows.
-for (const voice of ['low', 'medium', 'high']) {
+for (const voice of rounds(["low", "medium", "high"], ["low", "high"])) {
   await setup(3, voice);
   await listening();
   for (let k = 0; k < 6; k++) {

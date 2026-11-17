@@ -7,7 +7,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "smoke": "node tools/smoke.mjs",
-    "test": "node tools/test-all.mjs"
+    "test": "node tools/test-all.mjs",
+    "test:fast": "node tools/test-all.mjs --fast",
+    "test:changed": "node tools/test-all.mjs --fast --changed"
   },
   "keywords": [],
   "author": "",

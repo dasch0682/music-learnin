@@ -1,9 +1,9 @@
 // Plays every level of Two voices: a wrong answer (twice at round 1), then the right one. Recomputes the music rules from the MIDI notes.
 // Usage: npx vite --port 5404 --strictPort &   then   PORT=5404 node tools/two-voices.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5404}/two-voices/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -133,14 +133,14 @@ async function settle() { await page.waitForFunction(() => { const t = window.__
 const other = (s, v, not) => { const w = []; for (let m = s.ranges[v][0]; m <= s.ranges[v][1]; m++) if (NAT.includes(pc(m)) && m !== not) w.push(m); return w[(not * 7) % w.length]; };
 
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:two-voices', JSON.stringify({ level: l, tempo: 100 })), level);
   await page.reload();
   await page.click('.ml-start');
   await page.waitForFunction(() => window.__test?.state().texture);
   await page.waitForTimeout(300);
   const seen = new Set(), lens = new Set(), tags = new Set();
-  for (let round = 0; round < ROUNDS[level]; round++) {
+  for (let round = 0; round < rounds(ROUNDS[level], 3); round++) {
     const s = await state();
     seen.add(s.key); lens.add(s.n); tags.add(s.tag);
     rules(level, s);
@@ -187,13 +187,13 @@ for (let level = 1; level <= 6; level++) {
   }
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   // Many generated questions: rules on all of them, at least two textures, every key of the level, G major thirds.
-  const smp = await page.evaluate(([l, k]) => window.__test.sample(l, k), [level, level === 3 ? 600 : 300]);
+  const smp = await page.evaluate(([l, k]) => window.__test.sample(l, k), [level, rounds(level === 3 ? 600 : 300, level === 3 ? 300 : 150)]);
   const byTex = {}, byKey = {};
   for (const x of smp) { rules(level, x); byTex[x.texture] = (byTex[x.texture] || 0) + 1; byKey[x.key + '/' + x.texture] = 1; }
   check(Object.keys(byTex).length >= 2 && TEXTURES[level].every((t) => byTex[t]), `L${level}: textures seen ${JSON.stringify(byTex)}`);
   check(new Set(smp.map((x) => x.key)).size === { 1: 1, 2: 2 }[level] || level > 2, `L${level}: keys`);
   for (const t of TEXTURES[level]) { // each texture must be possible in each key of the level
-    const keys = await page.evaluate(([l, t2]) => [...new Set(window.__test.sample(l, 60, t2).map((x) => x.key))], [level, t]);
+    const keys = await page.evaluate(([l, t2, c]) => [...new Set(window.__test.sample(l, c, t2).map((x) => x.key))], [level, t, rounds(60, 40)]);
     const want = { 1: ['C'], 2: ['C', 'G'], 3: ['C', 'G', 'F'], 4: ['C', 'G', 'F'], 5: ['C', 'G', 'F'], 6: ['Am', 'Em', 'Dm'] }[level];
     check(want.every((k) => keys.includes(k)), `L${level} ${t}: keys ${keys}`);
   }

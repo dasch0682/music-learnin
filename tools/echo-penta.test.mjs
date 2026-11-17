@@ -1,9 +1,9 @@
 // Plays every level of Echo: a wrong pad, then the tune. Checks pads and tune against the scale and the attempts in IndexedDB.
 // Usage: npx vite --port 5408 --strictPort &   then   PORT=5408 node tools/echo-penta.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5408}/echo-penta/`;
 const shots = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -43,11 +43,11 @@ function checkTune(t, level, tag) {
 }
 page.setDefaultTimeout(15000);
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   const cfg = LEVELS[level];
   await setup(level, false);
   const lens = new Set();
-  for (let round = 0; round < 4; round++) {
+  for (let round = 0; round < rounds(4, 2); round++) {
     const t = await get();
     const tag = `L${level} r${round}`;
     lens.add(t.tune.length);
@@ -72,7 +72,7 @@ for (let level = 1; level <= 6; level++) {
     const want = round === 0 ? [false, true] : [true];
     check(JSON.stringify(mine.map((a) => a.ok)) === JSON.stringify(want) && mine.every((a) => a.level === level && a.item === t.tune.length && a.skill === cfg.skill && a.detail?.growing === false), `${tag}: ${JSON.stringify(mine.map((a) => [a.skill, a.ok, a.level, a.item, a.detail]))}`);
     if (round === 0) check(mine[1]?.detail?.retry === true && mine[0]?.detail?.retry === false, `${tag}: retry flag`);
-    if (round < 3) await ready();
+    if (round < rounds(4, 2) - 1) await ready();
   }
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   console.log(`L${level} lengths`, [...lens].join(' '));

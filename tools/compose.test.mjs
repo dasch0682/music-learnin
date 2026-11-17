@@ -1,11 +1,13 @@
 // Tests Make a tune: toggling, playback order, chords, scales, slots, reload, export / import, nothing logged.
 // Usage: npx vite --port 5406 --strictPort &   then   PORT=5406 node tools/compose.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
-import { writeFileSync } from 'node:fs';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { writeFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 const ID = 'compose';
 const base = `http://localhost:${process.env.PORT || 5406}/${ID}/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const TMP = dir || mkdtempSync(tmpdir() + '/cp-');
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR', hasTouch: true, acceptDownloads: true });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -101,7 +103,7 @@ await page.click('.cp-slot[data-slot="1"]');
 
 // Export a file, clear, import it back.
 const [dl] = await Promise.all([page.waitForEvent('download'), page.getByText('Enregistrer').click()]);
-const path = (dir || '/tmp') + '/tune.json';
+const path = TMP + '/tune.json';
 await dl.saveAs(path);
 const json = JSON.parse((await import('node:fs')).readFileSync(path, 'utf8'));
 check(json.app === 'music-learnin' && json.kind === 'tune' && json.tune.cells.flat().length === melody.length && json.tune.scale === 'pentaMajor', 'export content');
@@ -113,8 +115,8 @@ await page.waitForFunction(() => window.__test.state().cells.flat().length > 0);
 st = await state();
 check(st.cells.flat().length === melody.length && st.cells[15].join() === '0', 'import restores the tune');
 // A wrong file is refused and changes nothing.
-writeFileSync((dir || '/tmp') + '/bad.json', '{"hello":1}');
-await page.setInputFiles('.cp-file', (dir || '/tmp') + '/bad.json');
+writeFileSync(TMP + '/bad.json', '{"hello":1}');
+await page.setInputFiles('.cp-file', TMP + '/bad.json');
 await page.waitForTimeout(300);
 check((await state()).cells.flat().length === melody.length, 'bad file changed the tune');
 

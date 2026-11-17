@@ -1,10 +1,10 @@
 // Plays every level of Build the chord with real pointer events on the keys (and taps on the answer buttons):
 // a wrong answer first, then the right one. Expected notes are recomputed here from theory, not read from the app.
 // Usage: npx vite --port 5307 --strictPort &   then   PORT=5307 node tools/build-chords.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5307}/build-chords/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -106,12 +106,12 @@ async function plan(s) {
 }
 
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:build-chords', JSON.stringify({ level: l })), level);
   await page.reload();
   await page.click('.ml-start');
   await until(() => state());
-  const queue = queues[level];
+  const queue = FAST ? queues[level].slice(0, 2) : queues[level];
   await page.evaluate((q) => window.__test.force(q), queue);
   const rounds = queue.length + 1; // the first question is random
   const seen = new Set();
@@ -166,7 +166,7 @@ for (let level = 1; level <= 6; level++) {
     }
   }
   console.log(`L${level}`, [...seen].join(' '));
-  if (level === 1) {
+  if (level === 1 && !FAST) {
     await page.click('.bc-next');
     await page.waitForTimeout(400);
     check((await state()).level === 2, 'L1: next-level button did not move to level 2');

@@ -1,9 +1,9 @@
 // Plays every level of Write the tune: a wrong tune (twice at round 1), then the right one. Recomputes the music rules.
 // Usage: npx vite --port 5302 --strictPort &   then   PORT=5302 node tools/melody-dictation.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5302}/melody-dictation/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -65,13 +65,13 @@ async function settle() { await page.waitForFunction(() => window.__test.state()
 const other = (s, not) => { const w = []; for (let m = s.range[0]; m <= s.range[1]; m++) if ([0, 2, 4, 5, 7, 9, 11].includes(pc(m)) && m !== not) w.push(m); return w[(not * 7) % w.length]; };
 
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:melody-dictation', JSON.stringify({ level: l, tempo: 120 })), level);
   await page.reload();
   await page.click('.ml-start');
   await page.waitForTimeout(300);
   const seen = new Set(), clefs = new Set(), lens = new Set();
-  for (let round = 0; round < ROUNDS[level]; round++) {
+  for (let round = 0; round < rounds(ROUNDS[level], 3); round++) {
     const s = await state();
     seen.add(s.key); clefs.add(s.clef); lens.add(s.n);
     rules(level, s);

@@ -1,10 +1,10 @@
 // Plays every level of Key signatures: one wrong answer, then the right one. Checks the theory and the drawing too.
 // Usage: npx vite --port 5305 --strictPort &   then   PORT=5305 node tools/key-signatures.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const ID = 'key-signatures';
 const base = `http://localhost:${process.env.PORT || 5305}/${ID}/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR', hasTouch: true });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -78,11 +78,11 @@ for (const k of th.keys) {
   check([...new Set(k.scaleMinor.map((m) => m % 12))].sort((a, b) => a - b).join() === pcs, `notes of the minor scale of ${k.sig}`);
 }
 
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await setup(level, 'fr', 'dark');
   const seen = new Set(), kinds = new Set(), clefs = new Set();
-  const rounds = level === 1 ? 10 : level === 6 ? 24 : 8;
-  for (let round = 0; round < rounds; round++) {
+  const nRounds = level === 1 ? 10 : rounds(level === 6 ? 24 : 8, 2); // level 1 keeps its clean streak (next-level button)
+  for (let round = 0; round < nRounds; round++) {
     await ready();
     const s = await state();
     seen.add(s.item); kinds.add(s.kind); clefs.add(s.clef);
@@ -142,7 +142,7 @@ for (let level = 1; level <= 6; level++) {
     await ready();
     check((await state()).level === 2, 'L1: next level does not work');
   }
-  if (level === 6) check(kinds.has('name') && kinds.has('sig') && clefs.size >= 3, `L6: kinds ${[...kinds]} clefs ${[...clefs]}`);
+  if (level === 6 && !FAST) check(kinds.has('name') && kinds.has('sig') && clefs.size >= 3, `L6: kinds ${[...kinds]} clefs ${[...clefs]}`);
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   console.log(`L${level}`, [...seen].filter((x) => x !== 'shot2').join(' '), '|', [...kinds].join(' '), '|', [...clefs].join(' '));
   if (dir) {

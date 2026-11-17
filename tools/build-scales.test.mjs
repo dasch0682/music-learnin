@@ -1,10 +1,10 @@
 // Plays every level of Build the scale with real pointer events on the keys: a wrong set first, then the right one.
 // Expected notes are recomputed here from music theory (semitone patterns), not read from the app.
 // Usage: npx vite --port 5307 --strictPort &   then   PORT=5307 node tools/build-scales.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5307}/build-scales/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -80,7 +80,7 @@ function plan(s) {
 }
 
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:build-scales', JSON.stringify({ level: l })), level);
   await page.reload();
   await page.click('.ml-start');
@@ -88,11 +88,11 @@ for (let level = 1; level <= 6; level++) {
   // One question of each kind at the level, after the first random one.
   const kinds = allowed[level].kinds;
   const queue = kinds.map((k, i) => `${k}:${[...allowed[level].tonics][(i * 5 + level) % allowed[level].tonics.length]}`);
-  const rounds = Math.max(8, queue.length + 2);
-  while (queue.length < rounds - 1) queue.push(`${kinds[queue.length % kinds.length]}:${allowed[level].tonics[(queue.length * 7 + 3) % allowed[level].tonics.length]}`);
+  const nRounds = rounds(Math.max(8, queue.length + 2), 3);
+  while (queue.length < nRounds - 1) queue.push(`${kinds[queue.length % kinds.length]}:${allowed[level].tonics[(queue.length * 7 + 3) % allowed[level].tonics.length]}`);
   await page.evaluate((q) => window.__test.force(q), queue);
   const seen = new Set();
-  for (let round = 0; round < rounds; round++) {
+  for (let round = 0; round < nRounds; round++) {
     const s = await until(async () => { const x = await state(); return x && !x.locked ? x : null; });
     check(!!s, `L${level} round ${round}: no question`);
     if (!s) break;
@@ -127,7 +127,7 @@ for (let level = 1; level <= 6; level++) {
     check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   }
   console.log(`L${level}`, [...seen].join(' '));
-  if (level === 1) {
+  if (level === 1 && !FAST) {
     await page.click('.bs-next');
     await page.waitForTimeout(400);
     check((await state()).level === 2, 'L1: next-level button did not move to level 2');

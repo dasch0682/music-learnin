@@ -1,10 +1,10 @@
 // Plays every level of Play the scale with real pointer events on the keys: a wrong note, then the right ones.
 // Usage: npx vite --port 5303 --strictPort &   then   PORT=5303 node tools/play-scales.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const ID = 'play-scales';
 const base = `http://localhost:${process.env.PORT || 5303}/${ID}/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
+const browser = await launch({ speed: 1 }); // microphone test: pitches are fed in real time (accelerated timers made it hang when run next to other microphone tests)
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR', hasTouch: true });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -45,10 +45,10 @@ async function setup(level, lang, theme, model) {
 }
 
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await setup(level, 'fr', 'light', false);
   const seen = new Set();
-  for (let round = 0; round < 4; round++) {
+  for (let round = 0; round < rounds(4, 2); round++) {
     const s = await state();
     seen.add(s.item);
     const al = ALLOWED[level];
@@ -123,7 +123,7 @@ async function micSetup(level, instrument) {
   await page.click('.ml-start');
   await page.waitForFunction(() => window.__test.state().expected.length && !window.__test.state().locked, null, { timeout: 15000 });
 }
-for (const [instrument, shift] of [['C', 0], ['Bb', -2], ['Eb', -9]]) {
+for (const [instrument, shift] of combos([['Bb', -2], ['C', 0], ['Eb', -9]])) { // fast: one transposing instrument
   await micSetup(2, instrument);
   let s = await state();
   check(s.micMode || s.micFailed, 'mic: neither mic mode nor fallback');

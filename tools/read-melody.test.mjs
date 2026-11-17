@@ -1,10 +1,10 @@
 // Plays the 6 levels of Read and play: a run with a wrong first note, a run too late (not logged), then a right run.
 // Melodies are re-checked from music theory (scale, range, leaps, rhythm, notation in the DOM).
 // Usage: npx vite --port 5403 --strictPort &   then   PORT=5403 node tools/read-melody.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5403}/read-melody/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch({ speed: 1 }); // taps are timed against the real clock
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'dark', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -143,22 +143,22 @@ async function load(level, extra = {}) {
 
 await page.goto(base);
 const ONLY = process.env.LEVELS ? process.env.LEVELS.split(',').map(Number) : null;
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   if (ONLY && !ONLY.includes(level)) continue;
   // structure of several random melodies (reload = new melody)
   if (level === 3) {
-    // Level 3 must never be thin: at least 200 melodies, each with 3 or more distinct pitches and 3 or more notes.
+    // Level 3 must never be thin: at least 200 melodies (30 in fast mode), each with 3 or more distinct pitches and 3 or more notes.
     let thin = 0;
-    for (let k = 0; k < 200; k++) {
+    for (let k = 0; k < rounds(200, 30); k++) {
       await load(level);
       const s = await state();
       const distinct = new Set(s.pitches).size;
       if (distinct < 3 || s.pitches.length < 3) { thin++; if (thin <= 5) check(false, `L3 melody ${k}: ${s.pitches.length} notes, ${distinct} distinct ${s.pitches}`); }
     }
-    check(thin === 0, `L3: ${thin} of 200 melodies too thin`);
+    check(thin === 0, `L3: ${thin} melodies too thin`);
     console.log('L3 distinct-pitch check: 200 melodies, ' + (thin ? thin + ' thin' : 'none thin'));
   }
-  for (let k = 0; k < 4; k++) {
+  for (let k = 0; k < rounds(4, 1); k++) {
     await load(level);
     const s = await state();
     check(s.level === level && s.skill === 'read.melody', `L${level}: skill/level`);
@@ -192,6 +192,7 @@ for (let level = 1; level <= 6; level++) {
 }
 
 if (!ONLY) {
+  if (!FAST) {
   // Level 1 offers level 2 after a clean streak.
   await load(1, { tolerance: 'easy' });
   let up = false;
@@ -207,6 +208,7 @@ if (!ONLY) {
     await page.click('.rm-controls .ml-primary');
     await page.waitForFunction(() => window.__test.level === 2, null, { timeout: 5000 }).catch(() => {});
     check((await state()).level === 2, 'next level did not switch to 2');
+  }
   }
   // EN, light
   await page.evaluate(() => localStorage.setItem('ml:settings:read-melody', JSON.stringify({ level: 6, tempo: 100, tolerance: 'normal', latency: 0, labels: true })));

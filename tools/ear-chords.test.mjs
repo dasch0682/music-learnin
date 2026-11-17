@@ -1,9 +1,9 @@
 // Plays every level of Chords by ear: a wrong answer, then the right one. Checks the notes of the chord against the theory.
 // Usage: npx vite --port 5408 --strictPort &   then   PORT=5408 node tools/ear-chords.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5408}/ear-chords/`;
 const shots = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -22,14 +22,14 @@ const LEVELS = {
 };
 const pcs = (a) => [...new Set(a.map((m) => ((m % 12) + 12) % 12))].sort((x, y) => x - y).join();
 await page.goto(base);
-for (let level = 1; level <= 5; level++) {
+for (const level of levels(5)) {
   const cfg = LEVELS[level];
   await page.evaluate((l) => localStorage.setItem('ml:settings:ear-chords', JSON.stringify({ level: l })), level);
   await page.reload();
   await page.click('.ml-start');
   await page.waitForFunction(() => window.__test?.state());
   const seen = new Set();
-  for (let round = 0; round < 10; round++) {
+  for (let round = 0; round < rounds(10, 2); round++) {
     await page.waitForFunction(() => window.__test?.state());
     const s = await page.evaluate(() => window.__test.state());
     const tag = `L${level} r${round} ${s.item}`;

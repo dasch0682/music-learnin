@@ -1,6 +1,6 @@
 // Platform checks: ?level=, profiles, guided path, compare, rewards, update toast.
 // Usage: npx vite --port 5401 --strictPort &   then   PORT=5401 node tools/platform.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +8,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '');
 const port = process.env.PORT || 5401;
 const base = `http://localhost:${port}/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const ctx = await browser.newContext({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR', acceptDownloads: true });
 const page = await ctx.newPage();
 const errors = [];

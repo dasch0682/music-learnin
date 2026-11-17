@@ -1,9 +1,9 @@
 // Plays every level of Intervals by ear, in keyboard mode and in naming mode: a wrong answer, then the right one.
 // Usage: npx vite --port 5408 --strictPort &   then   PORT=5408 node tools/ear-intervals.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5408}/ear-intervals/`;
 const shots = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -26,15 +26,15 @@ const LEVELS = {
 const tapKey = (midi) => page.evaluate((m) => document.querySelector(`.ei-kb [data-midi="${m}"]`).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 })), midi);
 await page.goto(base);
 for (const mode of ['play', 'name']) {
-  for (let level = 1; level <= 5; level++) {
+  for (const level of levels(5)) {
     const cfg = LEVELS[level];
     await page.evaluate(([l, a]) => localStorage.setItem('ml:settings:ear-intervals', JSON.stringify({ level: l, answer: a })), [level, mode]);
     await page.reload();
     await page.click('.ml-start');
     await page.waitForFunction(() => window.__test?.state());
     const seen = new Set();
-    const rounds = mode === 'play' ? 8 : 5;
-    for (let round = 0; round < rounds; round++) {
+    const nRounds = rounds(mode === 'play' ? 8 : 5, 2);
+    for (let round = 0; round < nRounds; round++) {
       await page.waitForFunction(() => window.__test?.state());
       const s = await page.evaluate(() => window.__test.state());
       const tag = `${mode} L${level} r${round} ${s.item}`;

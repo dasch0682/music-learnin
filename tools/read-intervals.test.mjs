@@ -1,10 +1,10 @@
 // Plays every level of Read the interval: one wrong answer, then the right one.
 // The expected answer is recomputed here from the notes shown (letters and semitones), not taken from the game.
 // Usage: npx vite --port 5306 --strictPort &   then   PORT=5306 node tools/read-intervals.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5306}/read-intervals/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const errors = [];
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
@@ -26,19 +26,19 @@ const keyAcc = (key, letter) => (key > 0 && SHARPS.indexOf(letter) < key ? 1 : k
 const KINDS = { 1: 'shape', 2: 'number', 3: 'number', 4: 'quality', 5: 'quality', 6: 'quality' };
 const ROUNDS = { 1: 8, 2: 8, 3: 12, 4: 10, 5: 22, 6: 22 };
 
-for (const [scheme, locale] of [['light', 'fr-FR'], ['dark', 'en-US']]) {
+for (const [scheme, locale] of combos([['light', 'fr-FR'], ['dark', 'en-US']])) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 780 }, colorScheme: scheme, locale });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'read-intervals').sort((x, y) => x.t - y.t)); }; }));
   await page.goto(base);
-  for (let level = 1; level <= 6; level++) {
+  for (const level of levels(6)) {
     await page.evaluate((l) => localStorage.setItem('ml:settings:read-intervals', JSON.stringify({ level: l, sound: true })), level);
     await page.reload();
     await page.waitForFunction(() => window.__test?.state());
     const seen = new Set();
-    for (let round = 0; round < ROUNDS[level]; round++) {
+    for (let round = 0; round < rounds(ROUNDS[level], 2); round++) {
       const s = await page.evaluate(() => window.__test.state());
       const tag = `${scheme} L${level} round ${round}`;
       const want = expected(KINDS[level], s.notes);
@@ -74,7 +74,7 @@ for (const [scheme, locale] of [['light', 'fr-FR'], ['dark', 'en-US']]) {
       check(mine.length === 1 && mine[0].ok === (round !== 0) && mine[0].level === level && mine[0].item === want && mine[0].skill === 'read.intervals', `${tag}: attempts ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.skill]))}`);
     }
     const nextShown = await page.evaluate(() => document.querySelector('.ri-next').classList.contains('ri-show'));
-    check(nextShown === (level < 6 && ROUNDS[level] > 8), `${scheme} L${level}: next level button ${nextShown}`);
+    if (!FAST) check(nextShown === (level < 6 && ROUNDS[level] > 8), `${scheme} L${level}: next level button ${nextShown}`);
     check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `${scheme} L${level}: overflow`);
     check(!(await page.evaluate(() => document.documentElement.scrollHeight > innerHeight + 1)), `${scheme} L${level}: taller than the screen`);
     if (dir && level === 3) await page.screenshot({ path: `${dir}/ri-${level}-${scheme}-next.png` });

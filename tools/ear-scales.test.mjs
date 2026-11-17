@@ -1,9 +1,9 @@
 // Plays every level of Scales by ear: one wrong answer, then the right one. Checks the notes against music theory.
 // Usage: npx vite --port 5301 --strictPort &   then   PORT=5301 node tools/ear-scales.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5301}/ear-scales/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const errors = [];
 const newPage = async (locale, colorScheme) => {
   const p = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme, locale });
@@ -35,10 +35,10 @@ const start = async (page, level) => {
 
 const page = await newPage('fr-FR', 'light');
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await start(page, level);
   const seen = new Set();
-  for (let round = 0; round < 9; round++) {
+  for (let round = 0; round < rounds(9, 2); round++) {
     const s = await page.evaluate(() => window.__test.state());
     seen.add(s.item);
     const ref = STEPS[s.item];
@@ -63,7 +63,7 @@ for (let level = 1; level <= 6; level++) {
       `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.skill, a.ok, a.level, a.item]))}`);
   }
   const next = await page.evaluate(() => { const b = document.querySelector('.sc-next'); return getComputedStyle(b).visibility; });
-  check(next === (level < 6 ? 'visible' : 'hidden'), `L${level}: next button ${next}`);
+  if (!FAST) check(next === (level < 6 ? 'visible' : 'hidden'), `L${level}: next button ${next}`);
   check(!(await overflow(page)), `L${level}: overflow`);
   console.log(`L${level}`, [...seen].join(' '));
 }

@@ -1,9 +1,9 @@
 // Plays every level of Circle of fifths: one wrong answer, then the right one. Expected answers are recomputed from theory.
 // Usage: npx vite --port 5308 --strictPort &   then   PORT=5308 node tools/circle-of-fifths.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5308}/circle-of-fifths/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -55,14 +55,14 @@ async function tapKey(key) {
 }
 
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:circle-of-fifths', JSON.stringify({ level: l })), level);
   await page.reload();
   await page.click('.ml-start');
   await page.waitForTimeout(300);
   const seen = new Set();
-  const rounds = level === 6 ? 14 : level === 4 ? 12 : 8;
-  for (let round = 0; round < rounds; round++) {
+  const nRounds = rounds(level === 6 ? 14 : level === 4 ? 12 : 8, 2);
+  for (let round = 0; round < nRounds; round++) {
     const s = await st();
     seen.add(s.item.split(':')[0] + (s.mode && s.mode !== 'tap' ? '/' + s.mode : ''));
     check(s.level === level, `L${level}: level ${s.level}`);

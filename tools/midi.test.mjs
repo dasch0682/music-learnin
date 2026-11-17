@@ -1,8 +1,8 @@
 // Tests the Web MIDI input of the core keyboards (fake requestMIDIAccess injected), the no-MIDI and refused cases, and the piano timbre.
 // Usage: npx vite --port 5402 --strictPort &   then   PORT=5402 node tools/midi.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5402}/play-scales/`;
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
 

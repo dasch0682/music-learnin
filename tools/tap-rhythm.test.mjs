@@ -1,10 +1,10 @@
 // Plays the 9 levels of Tap the rhythm: a wrong run (last note missing), then a right one, with taps at the expected times.
 // Level 9 is also checked pattern by pattern (5/8, 7/8, 5/4) and levels 8 -> 9 through the "next level" button.
 // Usage: npx vite --port 5304 --strictPort &   then   PORT=5304 node tools/tap-rhythm.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5304}/tap-rhythm/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch({ speed: 1 }); // taps are timed against the real clock
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'dark', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -100,7 +100,7 @@ const overflow = () => page.evaluate(() => document.documentElement.scrollWidth 
 
 await page.goto(base);
 const ONLY = process.env.LEVELS ? process.env.LEVELS.split(',').map(Number) : null;
-for (let level = 1; level <= 9; level++) {
+for (const level of levels(9)) {
   if (ONLY && !ONLY.includes(level)) continue;
   await load(level);
   const before = (await attempts()).length;
@@ -131,7 +131,7 @@ if (ONLY) { await browser.close(); console.log(failed ? `${failed} failure(s)` :
 
 // Level 9, one hand-picked pattern per meter and grouping.
 await load(9);
-for (const id of ['5/8:3+2:eee-q|qe-ee', '5/8:2+3:ee-q.|q-eee', '7/8:2+2+3:q-ee-qe|ee-q-q.', '7/8:3+2+2:q.-q-ee|eee-ee-q', '7/8:2+3:x'.replace(':2+3:x', ':2+3+2:ee-qe-q|q-q.-ee'), '5/4:3+2:q-ee-q-h', '5/4:2+3:h-h.']) {
+for (const id of ['5/8:3+2:eee-q|qe-ee', '5/8:2+3:ee-q.|q-eee', '7/8:2+2+3:q-ee-qe|ee-q-q.', '7/8:3+2+2:q.-q-ee|eee-ee-q', '7/8:2+3:x'.replace(':2+3:x', ':2+3+2:ee-qe-q|q-q.-ee'), '5/4:3+2:q-ee-q-h', '5/4:2+3:h-h.'].slice(0, rounds(7, 2))) {
   const before = (await attempts()).length;
   await page.evaluate((i) => window.__show(i), id);
   let s = await state();
@@ -158,13 +158,13 @@ check(!late.correct, 'late taps judged correct');
 await load(8, { tempo: 140, tolerance: 'easy' });
 await startIfIdle();
 let up = false;
-for (let k = 0; k < 10 && !up; k++) {
+for (let k = 0; k < rounds(10, 1) && !up; k++) {
   const r = await playRun(false);
   check(r.correct, `L8 streak run ${k}`);
   up = (await state()).levelUp;
   if (!up) { await page.waitForFunction(() => window.__test.phase === 'idle' || window.__test.phase === 'count', null, { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(1500); await startIfIdle(); }
 }
-check(up, 'level 8 never offered level 9');
+if (!FAST) check(up, 'level 8 never offered level 9'); // fast: the streak is not played
 if (up) {
   await page.click('.tr-controls .ml-primary');
   await page.waitForFunction(() => window.__test.level === 9, null, { timeout: 5000 }).catch(() => {});

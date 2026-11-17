@@ -1,9 +1,9 @@
 // Plays every level of High or low: one wrong answer, then the right one. Checks the notes against the contour.
 // Usage: npx vite --port 5408 --strictPort &   then   PORT=5408 node tools/high-low.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5408}/high-low/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -15,13 +15,13 @@ const SKILL = { 1: 'listen.highlow', 2: 'listen.highlow', 3: 'listen.highlow', 4
 const GAPS = { 1: [7, 16], 2: [2, 4], 3: [1, 2], 4: [0, 3] };
 const wait = (ms) => page.waitForTimeout(ms);
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:high-low', JSON.stringify({ level: l })), level);
   await page.reload();
   await page.click('.ml-start');
   await page.waitForFunction(() => window.__test?.state());
   const seen = new Set();
-  for (let round = 0; round < 8; round++) {
+  for (let round = 0; round < rounds(8, 2); round++) {
     await page.waitForFunction(() => window.__test?.state());
     const s = await page.evaluate(() => window.__test.state());
     seen.add(s.item);

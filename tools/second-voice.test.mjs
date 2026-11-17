@@ -1,9 +1,9 @@
 // Plays every level of Second voice with simulated pitches: success, wrong note, app-voice leak.
 // Usage: npx vite --port 5220 --strictPort &   then   PORT=5220 node tools/second-voice.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5220}/second-voice/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch({ speed: 1 }); // microphone test: pitches are fed in real time (accelerated timers made it hang when run next to other microphone tests)
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'dark', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -19,18 +19,19 @@ await page.goto(base);
 // 0. Bass: in every voice setting and level, each bass note is at least C2 (36) and sounds strictly below
 // the lowest sung note of its step. An empty bass is a silent step, which passes.
 // Levels 1-2 are not bass levels: the app sings a moving voice above the held note there, by design.
-for (const voice of ['child', 'high', 'medium', 'low']) {
-  for (let level = 3; level <= 11; level++) {
-    const rounds = await page.evaluate(([l, v]) => window.__test.sample(l, v, 150), [level, voice]);
+const N = rounds(150, 40);
+for (const voice of rounds(['child', 'high', 'medium', 'low'], ['child', 'low'])) {
+  for (const level of rounds([3, 4, 5, 6, 7, 8, 9, 10, 11], [3, 7, 11])) {
+    const samples = await page.evaluate(([l, v, n]) => window.__test.sample(l, v, n), [level, voice, N]);
     let bad = 0, example = null;
-    for (const steps of rounds) for (const st of steps) {
+    for (const steps of samples) for (const st of steps) {
       const top = Math.min(...st.targets);
       if (!st.other.every((b) => b >= 36 && b < top)) { bad++; example ??= JSON.stringify(st); }
     }
-    check(rounds.length === 150 && bad === 0, `bass ${voice} L${level}: ${bad} step(s) with a bass note not below the sung note, e.g. ${example}`);
+    check(samples.length === N && bad === 0, `bass ${voice} L${level}: ${bad} step(s) with a bass note not below the sung note, e.g. ${example}`);
   }
 }
-for (let level = 1; level <= 11; level++) {
+for (const level of levels(11, [1, 6, 10, 11])) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:second-voice', JSON.stringify({ level: l, voice: 'child', tolerance: 50, phones: false })), level);
   await page.reload();
   await page.click('.ml-start');

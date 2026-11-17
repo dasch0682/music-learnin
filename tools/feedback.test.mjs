@@ -1,6 +1,6 @@
 // Feedback modes (docs/feedback-spec.md): storage, sounds, messages, streaks, reveal, reduced motion, accessibility.
 // Usage: npx vite --port 5220 --strictPort &   then   PORT=5220 node tools/feedback.test.mjs
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 import { fileURLToPath } from 'node:url';
 import { MESSAGES, pickMessage, FEEDBACK_MODES } from '../packages/core/feedback.js';
 
@@ -57,7 +57,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   check(FEEDBACK_MODES.join() === 'silent,discreet,normal,encouraging', 'modes list');
 }
 
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch({ speed: 1 }); // toasts, stars and sounds are checked against their real durations
 const errors = [];
 const sessions = [];
 async function session({ locale = 'fr-FR', reducedMotion = 'no-preference' } = {}) {
@@ -165,7 +165,7 @@ for (const mode of ['silent', 'discreet']) {
 }
 
 // ---- 4, 9, 11. encouraging (English then French): messages, no shake, reveal, streak, accessibility
-for (const locale of ['en-US', 'fr-FR']) {
+for (const locale of ['en-US', 'fr-FR']) { // both languages: the message banks are per language
   const lang = locale.slice(0, 2);
   const p = await session({ locale });
   await openCad(p, { mode: 'encouraging' });
@@ -215,18 +215,19 @@ for (const locale of ['en-US', 'fr-FR']) {
 {
   const p = await session({ locale: 'en-US' });
   await openCad(p, { mode: 'encouraging' });
-  for (let i = 0; i < 12; i++) { await right(p); await nextQ(p, 950); }
+  const N = rounds(12, 6);
+  for (let i = 0; i < N; i++) { await right(p); await nextQ(p, 950); }
   const l = await fbLog(p);
   const msgs = l.map((r) => r.message).filter(Boolean);
-  check(l.length === 12 && msgs.length <= 3 && new Set(msgs).size === msgs.length, `chatter: ${JSON.stringify(msgs)}`);
-  check(l.filter((r) => r.kind === 'streak').length === 2, 'streak entries at 5 and 10');
+  check(l.length === N && msgs.length <= 3 && new Set(msgs).size === msgs.length, `chatter: ${JSON.stringify(msgs)}`);
+  check(l.filter((r) => r.kind === 'streak').length === Math.floor(N / 5), 'streak entries at 5 and 10');
 }
 {
   const kinds = {};
   for (const [name, wait] of [['fast', 0], ['slow', 2200]]) {
     const p = await session({ locale: 'en-US' });
     await openCad(p, { mode: 'encouraging' });
-    for (let i = 0; i < 5; i++) { await sleep(wait); await right(p); await nextQ(p, 950); }
+    for (let i = 0; i < rounds(5, 2); i++) { await sleep(wait); await right(p); await nextQ(p, 950); }
     kinds[name] = (await fbLog(p)).map((r) => r.kind + ':' + r.sound).join();
     const ms = (await attemptsOf(p, 'ear-cadences')).map((a) => a.ms);
     kinds[name + 'Ms'] = Math.min(...ms);
@@ -253,7 +254,7 @@ for (const mode of FEEDBACK_MODES) {
 }
 
 // ---- 8. Microphone game: the microphone stays shut while a shell sound plays; no vibration
-for (const mode of ['normal', 'encouraging']) {
+for (const mode of combos(['encouraging', 'normal'])) {
   const p = await session();
   await p.goto(base + 'second-voice/');
   await p.evaluate(([m]) => {

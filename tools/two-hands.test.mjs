@@ -1,10 +1,10 @@
 // Plays the 6 levels of Two hands: a wrong run (one hit missing), then a right one, with pointerdown events at the expected times.
 // Expected hits are recomputed from the item id. Also checks the F/J keys, late taps, and the "next level" button.
 // Usage: npx vite --port 5304 --strictPort &   then   PORT=5304 node tools/two-hands.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5304}/two-hands/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch({ speed: 1 }); // taps are timed against the real clock
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -68,7 +68,7 @@ async function load(level, extra = {}) {
 const overflow = () => page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
 
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await load(level);
   const before = (await attempts()).length;
   let s = await state();
@@ -100,17 +100,17 @@ await tapPad();
 const late = await playRun(null, { lateMs: 250 });
 check(!late.correct, 'late taps judged correct');
 
-// Keys F and J, and the next-level button after a clean streak.
+// Keys F and J, and the next-level button after a clean streak (not in fast mode: 8 real-time runs).
 await load(3, { tolerance: 'easy' });
 let up = false;
-for (let k = 0; k < 8 && !up; k++) {
+for (let k = 0; k < rounds(8, 1) && !up; k++) {
   await tapPad();
   const r = await playRun(null, { keys: true });
   check(r.correct, `streak run ${k}: ${JSON.stringify(r)}`);
   up = (await state()).levelUp;
   if (!up) await page.waitForTimeout(1600);
 }
-check(up, 'next level never offered');
+if (!FAST) check(up, 'next level never offered');
 if (up) {
   await page.click('.th-controls .ml-primary');
   await page.waitForFunction(() => window.__test.level === 4, null, { timeout: 5000 }).catch(() => {});

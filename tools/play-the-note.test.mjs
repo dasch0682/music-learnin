@@ -1,10 +1,10 @@
 // Plays every level of Play the note, on the keyboard (wrong key, then right) and with injected microphone pitches
 // (steady wrong note, then the right one in another octave, with transposing instruments).
 // Usage: npx vite --port 5409 --strictPort &   then   PORT=5409 node tools/play-the-note.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5409}/play-the-note/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch({ speed: 1 }); // microphone test: pitches are fed in real time (accelerated timers made it hang when run next to other microphone tests)
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -44,10 +44,10 @@ const open = async (level, input, instrument) => {
 
 await page.goto(base);
 // ---- keyboard ----
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await open(level, 'keyboard', 'C');
   const seen = new Set();
-  for (let round = 0; round < 8; round++) {
+  for (let round = 0; round < rounds(8, 2); round++) {
     const s = await ready(false);
     seen.add(s.item);
     checkItem(level, s, `kb L${level}`);
@@ -74,12 +74,12 @@ for (let level = 1; level <= 6; level++) {
 }
 // ---- microphone with injected pitches ----
 const instruments = ['C', 'Bb', 'Eb', 'F', 'C', 'Bb'];
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   const ins = instruments[level - 1];
   await open(level, 'mic', ins);
   let s = await ready(true);
   check(s.micMode && !s.micFailed, `mic L${level}: mic mode not active ${JSON.stringify(s)}`);
-  for (let round = 0; round < 3; round++) {
+  for (let round = 0; round < rounds(3, 2); round++) {
     s = await ready(true);
     checkItem(level, s, `mic L${level}`);
     const target = s.midi + TRANSPOSE[ins];

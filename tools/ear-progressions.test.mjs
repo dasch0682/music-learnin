@@ -1,9 +1,9 @@
 // Plays every level of Chord paths: a wrong sequence, then the right one. Checks voicing, pads, names and the log.
 // Usage: npx vite --port 5302 --strictPort &   then   PORT=5302 node tools/ear-progressions.test.mjs [screenshot-dir]
-import { chromium } from 'playwright-core';
+import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5302}/ear-progressions/`;
 const dir = process.argv[2];
-const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -28,14 +28,14 @@ const MIN_SETS = { 5: ['i', 'iv', 'V', 'VI'] };
 const NEED = { 1: 2, 2: 3, 3: 3, 4: 5, 5: 7, 6: 5 };
 
 await page.goto(base);
-for (let level = 1; level <= 6; level++) {
+for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:ear-progressions', JSON.stringify({ level: l, tempo: 110 })), level);
   await page.reload();
   await page.click('.ml-start');
   await page.waitForTimeout(300);
   const seen = new Set();
   const tapRoman = (r) => page.click(`.pg-pads button[data-roman="${r}"]`);
-  for (let round = 0; round < 8; round++) {
+  for (let round = 0; round < rounds(8, 3); round++) {
     const s = await page.evaluate(() => window.__test.state());
     seen.add(s.item);
     const n = s.romans.length;
