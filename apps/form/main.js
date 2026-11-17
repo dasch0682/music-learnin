@@ -280,7 +280,7 @@ async function answer(id, button) {
       streak++;
       if (streak >= 8) {
         if (q.level < MAX_LEVEL) nextBtn.classList.add('fm-show');
-        else if (streak === 8) game.say(game.t('top'));
+        else if (streak === 8) game.celebrate(game.t('top'));
       }
       await game.attempt(rec);
     }

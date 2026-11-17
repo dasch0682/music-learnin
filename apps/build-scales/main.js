@@ -195,7 +195,7 @@ async function success() {
     streak++;
     if (streak >= STREAK_UP) {
       if (q.level < MAX_LEVEL) nextBtn.classList.add('bs-show');
-      else if (streak === STREAK_UP) game.say(game.t('top'));
+      else if (streak === STREAK_UP) game.celebrate(game.t('top'));
     }
     await game.attempt(rec);
   }

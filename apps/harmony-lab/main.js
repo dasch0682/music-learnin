@@ -407,7 +407,7 @@ function succeed(delay) {
     streak++;
     if (streak >= 8) {
       if (q.level < MAX_LEVEL) nextBtn.classList.add('hl-show');
-      else if (streak === 8) game.say(game.t('top'));
+      else if (streak === 8) game.celebrate(game.t('top'));
     }
     log(true, null);
   } else game.flash(true);

@@ -74,7 +74,6 @@ body.ml-game { display: flex; flex-direction: column; min-height: 100dvh; }
   :root[data-fb="discreet"] .ml-stage.ml-good, :root[data-fb="discreet"] .ml-stage.ml-bad { animation: none; }
   .ml-score.ml-pulse { animation: none; }
   .ml-stars span { margin-left: var(--dx); margin-top: var(--dy); animation: ml-fade .7s forwards; }
-  .ml-toast, .ml-toast.ml-show { left: 0; right: 0; width: fit-content; margin: 0 auto; transform: none; transition: opacity .15s; }
 }
 
 /* Building blocks for games */
@@ -191,3 +190,6 @@ body.ml-game { display: flex; flex-direction: column; min-height: 100dvh; }
 .ml-prow { flex-wrap: wrap; }
 .ml-pfb { flex: 1 1 100%; display: flex; align-items: center; gap: 8px; padding-left: 44px; font-size: 14px; color: var(--muted); }
 .ml-pfb select { flex: 1; min-width: 0; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; font-size: 15px; }
+@media (prefers-reduced-motion: reduce) {
+  .ml-toast, .ml-toast.ml-show { left: 0; right: 0; width: fit-content; margin: 0 auto; transform: none; transition: opacity .15s; }
+}

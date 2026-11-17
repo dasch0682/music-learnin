@@ -11,7 +11,7 @@ const L = (en, fr) => ({ en, fr });
 const SKILL = 'listen.twovoices', MAX_LEVEL = 6, CLEAN = 6;
 const game = createGame({
   id: 'two-voices',
-  title: L('Two voices', 'Deux voix'),
+  title: L('Write both voices', 'Écris les deux voix'),
   strings: {
     both: L('Both voices', 'Les deux voix'),
     topOnly: L('Top voice only', 'Voix du haut seule'),

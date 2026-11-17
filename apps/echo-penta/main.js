@@ -214,7 +214,7 @@ async function onPad(midi) {
     if (g !== gen) return;
     if (firstTry) {
       streak++;
-      if (streak === STREAK && LEVELS[levelNow() + 1]) game.say(game.t('levelUp'));
+      if (streak === STREAK && LEVELS[levelNow() + 1]) game.celebrate(game.t('levelUp'));
     }
     renderTexts();
     expose();

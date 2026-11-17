@@ -140,7 +140,7 @@ async function answer(ok, given, button) {
       streak++;
       if (streak >= 10) {
         if (q.level < MAX_LEVEL) nextBtn.classList.add('ei-show');
-        else if (streak === 10) game.say(game.t('top'));
+        else if (streak === 10) game.celebrate(game.t('top'));
       }
       await game.attempt(rec);
     }

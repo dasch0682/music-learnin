@@ -100,7 +100,7 @@ async function answer(option, button) {
   if (!option.ok) { streak = 0; button.disabled = true; return; } // try again on the same note
   locked = true;
   streak++;
-  if (streak === 20) game.say(game.t('levelUp'));
+  if (streak === 20) game.celebrate(game.t('levelUp'));
   setTimeout(next, 450);
 }
 
