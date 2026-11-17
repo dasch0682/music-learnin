@@ -42,6 +42,10 @@ for (const level of levels(6)) {
       check(s.answer === word && s.item === word && n.length === level - 2, `${tag}: contour ${word} vs ${s.answer}, ${n.length} notes`);
       check(steps.every((d) => Math.abs(d) >= 2 && Math.abs(d) <= 4), `${tag}: step sizes ${steps}`);
       check(s.options.includes(s.answer) && new Set(s.options).size === s.options.length && s.options.length === 4, `${tag}: options ${s.options}`);
+      // the drawing of the right answer must show the heights that are heard (svg y grows downwards)
+      const ys = await page.$eval(R(s.answer) + ' polyline', (p) => p.getAttribute('points').split(' ').map((xy) => -Number(xy.split(',')[1])));
+      const same = n.every((a, i) => n.every((b, j) => Math.sign(a - b) === Math.sign(Math.round((ys[i] - ys[j]) * 1000))));
+      check(ys.length === n.length && same, `${tag}: drawn heights ${ys.map(Math.round)} vs notes ${n}`);
     }
     const wrongs = s.options.filter((o) => o !== s.answer).map(R);
     if (round === 0 && dir && level % 2) await page.screenshot({ path: `${dir}/hl-${level}.png` });
