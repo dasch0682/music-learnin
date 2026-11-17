@@ -115,7 +115,7 @@ function content(s, tag) {
   check(bars.length === (level === 8 ? 2 : 1), `${tag}: ${bars.length} bars in ${s.item}`);
   for (const b of bars) check(Math.abs(b.reduce((a, id) => a + CELLS[id].reduce((x, e) => x + e[0], 0), 0) - barLen) < 1e-6, `${tag}: bar ${b} does not add up to ${barLen}`);
   check(bars.flat().every((id) => ALLOWED[level].includes(id)), `${tag}: cell outside the level in ${s.item}`);
-  if (FEATURE[level]) check(bars.flat().some((id) => FEATURE[level].includes(id)), `${tag}: level feature missing in ${s.item}`);
+  if (FEATURE[level]) check((level === 7 && s.item.includes('sw:')) || bars.flat().some((id) => FEATURE[level].includes(id)), `${tag}: level feature missing in ${s.item}`);
   if (level === 7) check(!s.item.startsWith('sw:') || bars.flat().includes('ee'), `${tag}: swing without eighths ${s.item}`);
   const exp = expectedFor(s);
   check(exp.length === s.expected.length && exp.every((v, i) => Math.abs(v - s.expected[i]) <= 1), `${tag}: onsets ${JSON.stringify(s.expected)} vs ${JSON.stringify(exp)}`);

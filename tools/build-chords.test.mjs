@@ -137,11 +137,16 @@ for (const level of levels(6)) {
       check(mid.missed && (await attempts()).length === before + 1, `L${level} ${s.item}: wrong answer not logged once`);
       await until(async () => !(await state()).locked);
       const again = await state();
+      check((await page.$$('.bc-choice.ml-reveal')).length === 0, `L${level} ${s.item}: answer revealed after the first miss`);
       check(again.n === n && !again.done, `L${level} ${s.item}: no retry state`);
       if (s.mode === 'build') check(eq(again.latched, [s.given]), `L${level} ${s.item}: keys not reset ${again.latched}`);
-      // second miss on the same question: feedback again, not logged again. NOTE: the answer is not revealed after it (no .ml-reveal in this game): reported.
+      // second miss on the same question: feedback again, not logged again.
       await (p.wrong2 || p.wrong)();
       check((await fbSince(page, fb0 + 1, 1))[0] === 'bad', `L${level} ${s.item}: second wrong answer gave no error feedback`);
+      if (s.choices) {
+        const rv = await page.$$eval('.bc-choice.ml-reveal', (bs) => bs.map((b) => b.dataset.id));
+        check(rv.length === 1 && rv[0] === s.id, `L${level} ${s.item}: reveal after the second miss: ${rv}`);
+      }
       await until(async () => !(await state()).locked);
       check((await attempts()).length === before + 1 && (await state()).n === n, `L${level} ${s.item}: second miss logged again or question changed`);
     }

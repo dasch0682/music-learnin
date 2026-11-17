@@ -132,12 +132,13 @@ for (const level of levels(6)) {
         for (const b of buttons) checkSig(await readSig(`.ks-choices button[data-sig="${b.sig}"]`), s.clef, b.sig, `${where} choice ${b.sig}`);
       }
       await shot();
-      // NOTE: after the second miss the choices are not revealed (no .ml-reveal): reported as an app gap, so only the error cue is checked here.
       const wr = s.options.filter((o) => o !== s.answer);
       for (let w = 0; w < (round === 0 ? 1 : round === 1 ? 2 : 0); w++) {
         await page.click(`.ks-choices button[data-sig="${wr[w]}"]`);
         check((await fbSince(page, fb0 + w, 1))[0] === 'bad', `${where}: wrong choice ${w + 1} gave no error feedback`);
         check(await page.$eval(`.ks-choices button[data-sig="${wr[w]}"]`, (b) => b.classList.contains('ml-wrong') && b.disabled), `${where}: wrong choice not marked`);
+        const rv = await page.$$eval('.ks-choices .ml-reveal', (bs) => bs.map((b) => b.dataset.sig));
+        check(w === 0 ? rv.length === 0 : rv.length === 1 && rv[0] === s.answer, `${where}: reveal after miss ${w + 1}: ${rv}`);
       }
       await page.click(`.ks-choices button[data-sig="${s.answer}"]`);
     }

@@ -81,6 +81,7 @@ for (const [scheme, locale] of combos([['light', 'fr-FR'], ['dark', 'en-US']])) 
       await page.waitForFunction(() => !document.querySelector('.ri-choices .ml-right'), null, { timeout: 8000 });
       check(mine.length === 1 && mine[0].ok === (round !== 0) && mine[0].level === level && mine[0].item === want && mine[0].skill === skillOf('read-intervals', level), `${tag}: attempts ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.skill]))}`);
     }
+    const nextShown = await page.evaluate(() => document.querySelector('.ri-next').classList.contains('ri-show')); // read before sampling: a settings change resets the streak
     // Many more generated questions (a settings change draws a new one without answering): the notes decide the answer.
     {
       const LO = { treble: 28, bass: 16, alto: 22, tenor: 20 }; // one ledger line under the staff, up to one above (diatonic steps, C4 = 28)
@@ -107,7 +108,6 @@ for (const [scheme, locale] of combos([['light', 'fr-FR'], ['dark', 'en-US']])) 
       await closeSettings(page);
       if (!FAST) check(items.size >= { 1: 3, 2: 4, 3: 7, 4: 4, 5: 9, 6: 9 }[level], `${scheme} L${level}: only ${[...items]} after sampling`);
     }
-    const nextShown = await page.evaluate(() => document.querySelector('.ri-next').classList.contains('ri-show'));
     if (!FAST) check(nextShown === (level < 6 && ROUNDS[level] > 8), `${scheme} L${level}: next level button ${nextShown}`);
     check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `${scheme} L${level}: overflow`);
     check(!(await page.evaluate(() => document.documentElement.scrollHeight > innerHeight + 1)), `${scheme} L${level}: taller than the screen`);

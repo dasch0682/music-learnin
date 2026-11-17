@@ -336,6 +336,7 @@ function answerName(id, button) {
   if (id === q.answer) { button.classList.add('ml-right'); success(); return; }
   button.classList.add('ml-wrong');
   button.disabled = true;
+  if (missed) choiceBox.querySelector(`[data-id="${q.answer}"]`)?.classList.add('ml-reveal'); // 2nd miss: show the answer
   failure([]);
 }
 
