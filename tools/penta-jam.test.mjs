@@ -1,6 +1,6 @@
 // Plays every level of Five-note jam: one wrong phrase, then right ones. Taps are timed on the backing clock.
 // Usage: npx vite --port 5407 --strictPort &   then   PORT=5407 node tools/penta-jam.test.mjs [screenshot-dir]
-import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { launch, FAST, rounds, levels, combos, CORE } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5407}/penta-jam/`;
 const dir = process.argv[2];
 const browser = await launch({ speed: 1 }); // taps are timed against the real clock
@@ -95,10 +95,10 @@ for (const L of FAST ? [1, 5, 9] : [1, 2, 3, 4, 5, 6, 7, 8, 9, '5b']) {
   const level = parseInt(L);
   if (process.env.ONLY && !process.env.ONLY.split(',').includes(String(L))) continue;
   if (L === '5b') { await page.reload(); await page.click('.ml-start'); await page.waitForFunction(() => window.__test?.running); }
-  if (L === '5b') await page.evaluate(async () => { // later stages: mark the first items as mastered (through the core's own logger)
-    const { logAttempt } = await import('/@fs/home/claude/music-learnin/packages/core/storage.js');
+  if (L === '5b') await page.evaluate(async (CORE) => { // later stages: mark the first items as mastered (through the core's own logger)
+    const { logAttempt } = await import(CORE + '/storage.js');
     for (const item of ['4th:I-V-I-V', '7th:I-V-I-V']) for (let k = 0; k < 6; k++) await logAttempt({ game: 'penta-jam', skill: 'play.tension', item, correct: true, level: 5, ms: 1 });
-  });
+  }, CORE);
   await page.evaluate((l) => localStorage.setItem('ml:settings:penta-jam', JSON.stringify({ level: l, tempo: 140, names: false })), level);
   await page.reload();
   await page.click('.ml-start');

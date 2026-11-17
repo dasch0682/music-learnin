@@ -1,6 +1,6 @@
 // Tests the Web MIDI input of the core keyboards (fake requestMIDIAccess injected), the no-MIDI and refused cases, and the piano timbre.
 // Usage: npx vite --port 5402 --strictPort &   then   PORT=5402 node tools/midi.test.mjs [screenshot-dir]
-import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { launch, FAST, rounds, levels, combos, CORE } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5402}/play-scales/`;
 const browser = await launch();
 let failed = 0;
@@ -83,8 +83,8 @@ const st = (page) => page.evaluate(() => window.__test.state());
 // 3. Pads light on MIDI too.
 {
   const { page, errors } = await open('fake');
-  const lit = await page.evaluate(async () => {
-    const { createPads } = await import('/@fs/home/claude/music-learnin/packages/core/keyboard.js');
+  const lit = await page.evaluate(async (CORE) => {
+    const { createPads } = await import(CORE + '/keyboard.js');
     const box = document.createElement('div'); document.body.append(box);
     const got = [];
     const pads = createPads(box, { notes: [60, 62, 64], onDown: (m) => got.push(['d', m]), onUp: (m) => got.push(['u', m]) });
@@ -96,7 +96,7 @@ const st = (page) => page.evaluate(() => window.__test.state());
     pads.setEnabled(false);
     window.__midi(0x90, 64, 90);
     return { on, off, got, other: box.querySelectorAll('.ml-down').length };
-  });
+  }, CORE);
   check(lit.on && lit.off, 'pads not lit / released: ' + JSON.stringify(lit));
   check(JSON.stringify(lit.got) === '[["d",62],["u",62]]', 'pad callbacks: ' + JSON.stringify(lit.got));
   check(lit.other === 0, 'unknown or disabled pad lit');
@@ -119,8 +119,8 @@ for (const mode of ['none', 'refused']) {
 // 5. Piano timbre: plays, returns the usual end time, and the graph is built without error for the whole range.
 {
   const { page, errors } = await open('none');
-  const r = await page.evaluate(async () => {
-    const { playNote, playChord, audio } = await import('/@fs/home/claude/music-learnin/packages/core/audio.js');
+  const r = await page.evaluate(async (CORE) => {
+    const { playNote, playChord, audio } = await import(CORE + '/audio.js');
     const ctx = audio();
     const out = [];
     for (const m of [21, 40, 60, 84, 108]) {
@@ -130,7 +130,7 @@ for (const mode of ['none', 'refused']) {
     playChord([60, 64, 67], { timbre: 'piano' });
     for (const t of ['pad', 'pluck', 'bass', 'voice']) playNote(60, { timbre: t });
     return out;
-  });
+  }, CORE);
   check(r.every((x) => Math.abs(x - 0.85) < 0.05), 'piano end time: ' + r);
   check(!errors.length, 'console (audio): ' + errors.join(' | '));
   await page.close();

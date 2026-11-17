@@ -43,3 +43,8 @@ export async function launch({ speed = FAST ? DEFAULT_SPEED : 1 } = {}) {
     close: async () => { for (const c of ctxs) await c.close().catch(() => {}); await browser.close().catch(() => {}); },
   };
 }
+
+/** Dev-server URL prefix of packages/core (for dynamic imports inside page.evaluate). */
+import { fileURLToPath as _f } from 'node:url';
+import { resolve as _r, dirname as _d } from 'node:path';
+export const CORE = '/@fs' + _r(_d(_f(import.meta.url)), '../../packages/core');
