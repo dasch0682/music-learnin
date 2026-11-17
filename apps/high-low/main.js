@@ -49,9 +49,10 @@ const ARROWS = {
   same: '<path d="M12 22h40v8H12zM12 36h40v8H12z"/>',
 };
 const arrowSvg = (kind) => `<svg viewBox="0 0 64 64" fill="currentColor" aria-hidden="true">${ARROWS[kind]}</svg>`;
-function shapeSvg(word) {
+// Drawn with the real step sizes of the question (sizes), so heights match what is heard.
+function shapeSvg(word, sizes = []) {
   const ys = [0];
-  for (const c of word) ys.push(ys[ys.length - 1] + (c === 'u' ? 1 : -1));
+  [...word].forEach((c, i) => ys.push(ys[ys.length - 1] + (c === 'u' ? 1 : -1) * (sizes[i] || 1)));
   const min = Math.min(...ys), max = Math.max(...ys);
   const pts = ys.map((y, i) => [14 + (i * 92) / (ys.length - 1), 62 - ((y - min) / (max - min)) * 48]);
   return `<svg viewBox="0 0 120 76" aria-hidden="true"><polyline points="${pts.map((p) => p.join(',')).join(' ')}" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>${pts.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="7" fill="currentColor"/>`).join('')}</svg>`;
@@ -60,10 +61,11 @@ function shapeSvg(word) {
 // ---- questions ------------------------------------------------------------
 function build(level, item) {
   const cfg = LEVELS[level];
-  let offsets, answer, options;
+  let offsets, answer, options, sizes = null;
   if (cfg.shapes) {
+    sizes = [...item].map(() => 2 + rand(3));
     offsets = [0];
-    for (const c of item) offsets.push(offsets[offsets.length - 1] + (c === 'u' ? 1 : -1) * (2 + rand(3)));
+    [...item].forEach((c, i) => offsets.push(offsets[offsets.length - 1] + (c === 'u' ? 1 : -1) * sizes[i]));
     answer = item;
     options = level === 5 ? cfg.items : shuffle([item, ...shuffle(cfg.items.filter((w) => w !== item)).slice(0, 3)]);
   } else {
@@ -74,7 +76,7 @@ function build(level, item) {
   }
   const lo = LO - Math.min(...offsets), hi = HI - Math.max(...offsets);
   const base = lo + rand(hi - lo + 1);
-  return { level, skill: cfg.skill, item, answer, options, shapes: !!cfg.shapes, notes: offsets.map((o) => base + o), timbre: pick(['piano', 'piano', 'voice', 'pad']) };
+  return { level, skill: cfg.skill, item, answer, options, shapes: !!cfg.shapes, sizes, notes: offsets.map((o) => base + o), timbre: pick(['piano', 'piano', 'voice', 'pad']) };
 }
 
 let q = null, started = 0, streak = 0, last = null, missed = false, locked = false, seq = 0, quietUntil = 0, timer = 0;
@@ -98,7 +100,7 @@ function renderAnswers() {
   if (!q) return;
   answers.className = 'hl-answers ' + (q.shapes ? 'hl-shapes' : 'hl-pair');
   answers.replaceChildren(...q.options.map((o) => {
-    const b = game.h('button', { className: 'ml-btn hl-big', innerHTML: q.shapes ? shapeSvg(o) : arrowSvg(o) });
+    const b = game.h('button', { className: 'ml-btn hl-big', innerHTML: q.shapes ? shapeSvg(o, q.sizes) : arrowSvg(o) });
     b.dataset.value = o;
     if (!q.shapes) b.setAttribute('aria-label', game.t(o));
     b.onclick = () => answer(o, b);
@@ -156,7 +158,7 @@ async function answer(value, button) {
   }
 }
 
-window.__test = { state: () => (q ? { ...q, notes: [...q.notes], options: [...q.options] } : null) };
+window.__test = { state: () => (q ? { ...q, notes: [...q.notes], options: [...q.options], sizes: q.sizes && [...q.sizes] } : null), shapeSvg };
 
 game.ready().then(() => {
   game.stage.replaceChildren(game.h('div', { className: 'hl-top' }, replay), answers, nextBtn);
