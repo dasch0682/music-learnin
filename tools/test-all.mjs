@@ -138,5 +138,10 @@ if (fast && repeat === 1) {
   const total = Math.round((Date.now() - t0) / 1000);
   if (total > BUDGET_TOTAL && list.length === all.length) console.log(`WARN fast suite took ${total} s (budget ${BUDGET_TOTAL} s on 2 CPUs)`);
 }
-console.log(`${label}${repeat > 1 ? ' x' + repeat : ''}: ${results.length - bad.length - flaky.length} ok, ${bad.length} fail, ${flaky.length} flaky (${Math.round((Date.now() - t0) / 1000)} s)`);
+const summary = `${label}${repeat > 1 ? ' x' + repeat : ''}: ${results.length - bad.length - flaky.length} ok, ${bad.length} fail, ${flaky.length} flaky (${Math.round((Date.now() - t0) / 1000)} s)`;
+console.log(summary);
+// Last run of the whole suite, read by tools/status.mjs (only complete runs: a partial --only run says nothing about the project).
+if (list.length === all.length && repeat === 1) {
+  try { writeFileSync(logs + `last-${label}.json`, JSON.stringify({ summary, at: new Date().toISOString(), fail: [...new Set(bad.map((r) => r.slug))], flaky: flaky.map((r) => r.slug) })); } catch {}
+}
 process.exit(bad.length ? 1 : 0);

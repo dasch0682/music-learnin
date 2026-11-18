@@ -9,7 +9,8 @@
     "smoke": "node tools/smoke.mjs",
     "test": "node tools/test-all.mjs",
     "test:fast": "node tools/test-all.mjs --fast",
-    "test:changed": "node tools/test-all.mjs --fast --changed"
+    "test:changed": "node tools/test-all.mjs --fast --changed",
+    "status": "node tools/status.mjs --ci"
   },
   "keywords": [],
   "author": "",

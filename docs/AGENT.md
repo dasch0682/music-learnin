@@ -1,4 +1,7 @@
-# Instructions for an agent building a game
+# Instructions for an agent
+
+Your task is a ticket: `docs/project/tickets/T-NNN-*.md`. Read it first. It lists what to read, what you may change,
+and the done criteria. Anything here that the ticket contradicts: the ticket wins.
 
 The repo is a suite of offline, bilingual (EN/FR) music-learning games, from first steps (young children) to mastery.
 Practice comes before theory: the player hears, sings, plays or builds first; names and rules come later, at higher levels.
@@ -12,13 +15,14 @@ Every challenge is bite-size (a few seconds).
   listening or choices → `apps/ear-cadences/` + `tools/ear-cadences.test.mjs`;
   microphone → `apps/second-voice/` + `tools/second-voice.test.mjs`;
   staff + keyboard → `apps/play-the-note/`; rhythm → `apps/tap-rhythm/`.
-- Your brief in `docs/briefs.md` (only the sections named in your task).
+- Your ticket, then only the files it lists. Old game briefs: `docs/briefs.md` (only if your ticket names a section).
 
 Files of your game may already exist from an interrupted run: read them and continue, do not restart from zero.
 
 ## Hard constraints
 
-- Write only in `apps/<your-slug>/` and `tools/<your-slug>.test.mjs`. Never edit `packages/core`, other apps, `package.json`, `vite.config.js`, docs. No git, no npm install. Other agents work in other folders at the same time.
+- Write only in the files your ticket allows (by default `apps/<your-slug>/` and `tools/<your-slug>.test.mjs`). Never edit `packages/core`, other apps, `package.json`, `vite.config.js`, docs unless the ticket says so. No npm install.
+- You work in your own git worktree: commit there on your branch (`T-NNN: <what>`), never push, never merge. Other agents work in other worktrees at the same time.
 - A core bug or missing feature: work around it in your app and report it (file, problem, fix).
 - `apps/<slug>/index.html` = copy of `apps/find-a-note/index.html` with the title changed; `main.js`; optional `style.css`. Import core with `@core/...`.
 - `createGame({ id })` equals the folder name. Use exactly the skill ids of the brief (already in `taxonomy.js`).
@@ -54,7 +58,16 @@ Single run: `PORT=<PORT> FAST=1 node tools/<slug>.test.mjs <your scratch dir>`.
 
 ## Final report
 
-At most 12 lines per game: levels done, how answers are judged, what is unfinished, core issues.
+Write it in the `## Rapport` section of your ticket and set `status: review` in its front matter; return the same text.
+At most 10 lines, this format:
+
+```
+Fait : …
+Fichiers : …
+Tests : <summary line of npm run test:changed>
+Bugs trouvés hors périmètre : … (file:line) or aucun
+Décisions à prendre : … or aucune
+```
 
 ## If your task says you may edit `packages/core` or the home page
 
