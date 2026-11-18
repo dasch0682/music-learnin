@@ -1,18 +1,16 @@
-// Plays every level of Jazz colours: one wrong answer, then the right one. Checks the chord tones against music theory.
-// Usage: npx vite --port 5301 --strictPort &   then   PORT=5301 node tools/ear-jazz.test.mjs [screenshot-dir]
-import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
-const base = `http://localhost:${process.env.PORT || 5301}/ear-jazz/`;
+// Jazz colours, every level: chord tones against the theory (pitch classes, colour note, voicing, bass), choices per level (family, mix at
+// level 6); one wrong then right answers (log), reveal after the 2nd miss, next level after a clean streak, settings persistence, smoke.
+// Usage: PORT=5220 [FAST=1] node tools/ear-jazz.test.mjs [screenshot-dir]
+import { launch, FAST, rounds, levels } from './lib/harness.mjs';
+import { skillOf, makeChecker, overflows, smoke, persistCheck, answerChoice, levelUpCheck } from './lib/shared-a.mjs';
+const SLUG = 'ear-jazz';
+const url = `http://localhost:${process.env.PORT || 5220}/${SLUG}/`;
 const dir = process.argv[2];
+const C = makeChecker(), { check, errors } = C;
 const browser = await launch();
-const errors = [];
-const newPage = async (locale, colorScheme) => {
-  const p = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme, locale });
-  p.on('pageerror', (e) => errors.push(String(e)));
-  p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  return p;
-};
-let failed = 0;
-const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
+await smoke({ browser, url, check });
+const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
+C.watch(page);
 // Independent reference: pitch classes of each chord (degrees as semitones above the root, mod 12).
 // 9 = 2, 11 = 5, 13 = 9, b9 = 1, #9 = 3, #11 = 6, b13 = 8.
 const PCS = {
@@ -27,66 +25,53 @@ const FAM = { 2: ['7', '9', '13', '7sus4'], 3: ['maj7', 'maj9', '69', 'maj7#11']
 const ALLOWED = { 1: ['7', '9', 'maj7', 'maj9', 'm7', 'm9'], ...FAM, 6: Object.keys(PCS) };
 const COLOURED = ['9', 'maj9', 'm9'];
 const mod = (n) => ((n % 12) + 12) % 12;
-const attempts = (page) => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'ear-jazz').sort((x, y) => x.t - y.t)); }; }));
-const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
-const start = async (page, level) => {
+const R = (t) => `.jz-choices button[data-type="${t}"]`;
+const open = async (level) => {
   await page.evaluate((l) => localStorage.setItem('ml:settings:ear-jazz', JSON.stringify({ level: l })), level);
   await page.reload();
   await page.click('.ml-start');
-  await page.waitForTimeout(300);
+  await page.waitForFunction(() => window.__test?.state()?.item);
 };
-
-const page = await newPage('fr-FR', 'light');
-await page.goto(base);
+await page.goto(url);
 for (const level of levels(6)) {
-  await start(page, level);
-  const seen = new Set();
-  for (let round = 0; round < rounds(9, 2); round++) {
-    const s = await page.evaluate(() => window.__test.state());
-    seen.add(s.item);
-    check(s.level === level && ALLOWED[level].includes(s.item), `L${level}: item ${s.item} not allowed`);
-    check(s.bass >= 40 && s.bass < 52 && s.notes[0] === s.bass, `L${level}: bass ${s.bass}`);
+  await open(level);
+  let s = await page.evaluate(() => window.__test.state());
+  const seen = [];
+  for (let round = 0; round < rounds(24, 4); round++) {
+    const tag = `L${level} r${round} ${s.item}`;
+    seen.push(s.item);
+    check(s.level === level && ALLOWED[level].includes(s.item), `${tag}: item not allowed`);
+    check(s.bass >= 40 && s.bass < 52 && s.notes[0] === s.bass, `${tag}: bass ${s.bass}`);
     const pcs = new Set(s.notes.map((m) => mod(m - s.bass)));
     const want = new Set(PCS[s.item]);
-    check(pcs.size === want.size && [...want].every((x) => pcs.has(x)), `L${level} ${s.item}: pitch classes ${[...pcs].sort((a, b) => a - b)} vs ${[...want].sort((a, b) => a - b)}`);
-    check(pcs.has(MUST[s.item]), `L${level} ${s.item}: missing colour note`);
-    check(s.notes.slice(1).every((m, i, a) => m > s.bass && (i === 0 || m >= a[i - 1])) && s.notes.at(-1) <= 84 && s.notes[1] >= 48, `L${level} ${s.item}: voicing ${s.notes}`);
-    if (level === 1) check(s.types.join() === 'plain,colour' && s.answer === (COLOURED.includes(s.item) ? 'colour' : 'plain'), `L1: answer ${s.answer} for ${s.item}`);
-    else if (level <= 5) check(s.answer === s.item && s.types.join() === FAM[level].join(), `L${level}: choices ${s.types}`);
-    else check(s.types.length === 6 && s.types.includes(s.item), `L6: choices ${s.types}`);
-    const before = (await attempts(page)).length;
-    if (round === 0) {
-      if (dir && [1, 4].includes(level)) await page.screenshot({ path: `${dir}/jz-${level}.png` });
-      await page.click(`.jz-choices button:not([data-type="${s.answer}"])`);
-      await page.waitForTimeout(150);
+    check(pcs.size === want.size && [...want].every((x) => pcs.has(x)), `${tag}: pitch classes ${[...pcs].sort((a, b) => a - b)} vs ${[...want].sort((a, b) => a - b)}`);
+    check(pcs.has(MUST[s.item]), `${tag}: missing colour note`);
+    check(s.notes.slice(1).every((m, i, a) => m > s.bass && (i === 0 || m >= a[i - 1])) && s.notes.at(-1) <= 84 && s.notes[1] >= 48, `${tag}: voicing ${s.notes}`);
+    if (level === 1) check(s.types.join() === 'plain,colour' && s.answer === (COLOURED.includes(s.item) ? 'colour' : 'plain'), `${tag}: answer ${s.answer}`);
+    else if (level <= 5) check(s.answer === s.item && s.types.join() === FAM[level].join(), `${tag}: choices ${s.types}`);
+    else {
+      const fam = Object.values(FAM).find((f) => f.includes(s.item));
+      check(s.types.length === 6 && s.types.includes(s.item) && new Set(s.types).size === 6, `${tag}: choices ${s.types}`);
+      check(s.types.filter((x) => fam.includes(x)).length >= 2, `${tag}: no look-alike in the choices ${s.types}`);
     }
-    await page.click(`.jz-choices button[data-type="${s.answer}"]`);
-    await page.waitForTimeout(1100);
-    const mine = (await attempts(page)).slice(before);
-    check(mine.length === 1 && mine[0].ok === (round !== 0) && mine[0].level === level && mine[0].item === s.item && mine[0].skill === 'listen.jazz',
-      `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.skill, a.ok, a.level, a.item]))}`);
+    const btn = await page.$$eval('.jz-choices button', (bs) => bs.map((b) => b.dataset.type));
+    check(JSON.stringify(btn) === JSON.stringify(s.types), `${tag}: buttons ${btn}`);
+    if (round === 0 && dir && [1, 4].includes(level)) await page.screenshot({ path: `${dir}/jz-${level}.png` });
+    const wrongs = s.types.filter((t) => t !== s.answer).map(R);
+    const mode = round === 0 ? 'wrong1' : round === 1 && wrongs.length > 1 ? 'wrong2' : 'right';
+    s = await answerChoice({ page, slug: SLUG, level, skill: skillOf(SLUG, level), check, tag, s, mode, rightSel: R(s.answer), wrongSels: wrongs });
   }
-  const next = await page.evaluate(() => getComputedStyle(document.querySelector('.jz-next')).visibility);
-  if (!FAST) check(next === (level < 6 ? 'visible' : 'hidden'), `L${level}: next button ${next}`);
-  check(!(await overflow(page)), `L${level}: overflow`);
-  // The note-by-note button must not throw or change the question.
-  await page.click('.jz-arp');
-  console.log(`L${level}`, [...seen].join(' '));
+  // core pickWeak: no immediate repeat when the pool has more than 4 items (the app passes avoid then): levels 5 and 6
+  if (level >= 5) check(!seen.some((x, i) => i && x === seen[i - 1]), `L${level}: same item twice in a row ${seen}`);
+  if (!FAST && ALLOWED[level].length <= 4) check(ALLOWED[level].every((c) => seen.includes(c)), `L${level}: not every chord came up (${[...new Set(seen)]})`);
+  await page.click('.jz-arp'); // the note-by-note button must not throw or change the question
+  if (!FAST || level === 1 || level === 6) await levelUpCheck({ page, slug: SLUG, level, check, rightSelOf: (st) => R(st.answer), nextSel: '.jz-next', max: 16, last: level === 6, celebrate: true });
+  check(!(await overflows(page)), `L${level}: overflow`);
+  console.log(`L${level}`, [...new Set(seen)].join(' '));
 }
-// Next-level button moves up one level.
-await start(page, 1);
-for (let i = 0; i < 8; i++) { const s = await page.evaluate(() => window.__test.state()); await page.click(`.jz-choices button[data-type="${s.answer}"]`); await page.waitForTimeout(1100); }
-await page.click('.jz-next'); await page.waitForTimeout(400);
-check((await page.evaluate(() => window.__test.state().level)) === 2, 'next-level button did not go to level 2');
-await page.close();
-
-// English, dark, hardest level.
-const en = await newPage('en-US', 'dark');
-await en.goto(base);
-await start(en, 6);
-check(!(await overflow(en)), 'EN L6: overflow');
-if (dir) await en.screenshot({ path: `${dir}/jz-en-dark.png` });
+await open(1);
+await persistCheck({ page, url, slug: SLUG, fields: [[0, 'level', 4]], check, applied: async (p) => { const s = await p.evaluate(() => window.__test.state()); return s.level === 4 && FAM[4].includes(s.item) ? '' : `level ${s.level} ${s.item}`; } });
 check(!errors.length, 'console: ' + errors.join(' | '));
 await browser.close();
-console.log(failed ? `${failed} failure(s)` : 'all good');
-process.exit(failed ? 1 : 0);
+console.log(C.failed ? `${C.failed} failure(s)` : 'all good');
+process.exit(C.failed ? 1 : 0);

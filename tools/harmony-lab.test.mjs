@@ -1,17 +1,20 @@
+// Harmony lab, every level: valid answers recomputed from theory (pitch classes), sounds of the blocks, wrong then second wrong then right answers
+// (marks, clears, log: skill from taxonomy, error feedback), next level after 8 clean questions, no repeat in the 7-item pool, persistence, smoke.
 // Plays every level of Harmony lab: a wrong answer, then the right one. Valid answers are recomputed from theory
 // (pitch classes of the chords), never read back from the app's own tables.
 // Usage: npx vite --port 5308 --strictPort &   then   PORT=5308 node tools/harmony-lab.test.mjs [screenshot-dir]
-import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
-const base = `http://localhost:${process.env.PORT || 5308}/harmony-lab/`;
+import { launch, FAST, rounds, levels } from './lib/harness.mjs';
+import { skillOf as taxSkill, makeChecker, overflows, smoke, persistCheck, readAttempts, newAttempts, fbLog, fbSince, isShown } from './lib/shared-a.mjs';
+const SLUG = 'harmony-lab';
+const base = `http://localhost:${process.env.PORT || 5220}/${SLUG}/`;
 const dir = process.argv[2];
+const C = makeChecker();
 const browser = await launch({ speed: 3 }); // marks and clears are checked a few hundred ms apart
+await smoke({ browser, url: base, check: C.check });
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR' });
-const errors = [];
-page.on('pageerror', (e) => errors.push(String(e)));
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-let failed = 0;
-const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'harmony-lab').sort((x, y) => x.t - y.t)); }; }));
+C.watch(page);
+const check = C.check;
+const attempts = () => readAttempts(page, SLUG);
 const st = () => page.evaluate(() => window.__test.state());
 
 // ---------- theory ----------
@@ -125,19 +128,38 @@ async function clickBlock(s, id) {
   else check(last && last.notes.length === 5 && setOf(last.notes) === [...b.pcs].sort((a, b2) => a - b2).join() && mod(last.notes[0], 12) === b.rootPc, `scale sound of ${id}`);
 }
 
-await page.goto(base);
-for (const level of levels(8)) {
-  await page.evaluate((l) => localStorage.setItem('ml:settings:harmony-lab', JSON.stringify({ level: l, tempo: 110 })), level);
+/** Answers a question correctly (no mistake). */
+async function solve(s) {
+  if (s.mode === 'label') {
+    for (let k = 0; k < s.slots.length; k++) {
+      const c = s.slots[k].given;
+      await page.click(tray(c.type === 'dom7' ? 'tension' : familyOf(off(c, s.key))));
+      await page.waitForTimeout(60);
+    }
+    return;
+  }
+  const exp = expected(s);
+  for (const [, ids] of exp) await page.click(tray(ids[0]));
+  await page.click('.hl-ok');
+}
+const open = async (level, tempo = 110) => {
+  await page.evaluate(([l, t]) => localStorage.setItem('ml:settings:harmony-lab', JSON.stringify({ level: l, tempo: t })), [level, tempo]);
   await page.reload();
   await page.click('.ml-start');
-  await page.waitForTimeout(400);
+  await page.waitForFunction(() => window.__test?.state());
+};
+const nextBtnShown = () => isShown(page, '.hl-next');
+await page.goto(base);
+for (const level of levels(8, [1, 8])) {
+  await open(level);
   const seen = new Set();
-  const nRounds = rounds(level >= 7 ? 9 : level === 5 ? 8 : 6, 2);
+  const nRounds = rounds(level >= 7 ? 9 : level === 5 ? 8 : 6, 3);
   for (let round = 0; round < nRounds; round++) {
     const s = await st();
     seen.add(s.item.split(':')[0]);
     check(s.level === level, `L${level}: level ${s.level}`);
     const before = (await attempts()).length;
+    const fb0 = (await fbLog(page)).length;
     if (s.mode === 'label') {
       const key = s.key;
       for (let k = 0; k < s.slots.length; k++) {
@@ -152,7 +174,17 @@ for (const level of levels(8)) {
           await page.click(tray(wrong));
           await page.waitForTimeout(100);
           check((await st()).step === k, 'L8: a wrong label does not advance');
-          await page.waitForTimeout(700);
+          check((await fbSince(page, fb0, 1))[0] === 'bad', 'L8: wrong label gave no error feedback');
+          await page.waitForFunction(() => !window.__test.state().slots.some((x) => x.status === 'wrong'), null, { timeout: 5000 }).catch(() => {});
+          // second miss: feedback again, logged once
+          check((await page.$$('.hl-block.ml-reveal')).length === 0, 'L8: label revealed after the first miss');
+          const wrong2 = ['rest', 'move', 'tension'].filter((f) => f !== fam && f !== wrong)[0] || wrong;
+          await page.click(tray(wrong2));
+          check((await fbSince(page, fb0 + 1, 1))[0] === 'bad', 'L8: second wrong label gave no error feedback');
+          check((await attempts()).length === before + 1, 'L8: second wrong label logged again');
+          const rl = await page.$$eval('.hl-block.ml-reveal', (b) => b.map((x) => x.dataset.id));
+          check(rl.length === 1 && rl[0] === fam, `L8: reveal after the second miss ${rl} vs ${fam}`);
+          await page.waitForFunction(() => !window.__test.state().slots.some((x) => x.status === 'wrong'), null, { timeout: 5000 }).catch(() => {});
         }
         await page.click(tray(fam));
         await page.waitForTimeout(60);
@@ -171,13 +203,22 @@ for (const level of levels(8)) {
         }
         check(!(await page.locator('.hl-ok').isDisabled()), `L${level}: confirm enabled when all slots are filled`);
         await page.click('.hl-ok');
-        await page.waitForTimeout(200);
         const after = await st();
         check(after.slots.some((x) => x.status === 'wrong'), `L${level}: wrong slot marked`);
-        await page.waitForTimeout(900);
+        check((await fbSince(page, fb0, 1))[0] === 'bad', `L${level}: wrong answer gave no error feedback`);
+        await page.waitForFunction(() => window.__test.state().slots.filter((x) => !x.given && !x.placed).length === 1, null, { timeout: 8000 }).catch(() => {});
         const cleared = await st();
         check(cleared.slots.filter((x) => !x.given && !x.placed).length === 1 && cleared.qid === s.qid, `L${level}: only the wrong slot is cleared`);
         const [i, ids] = exp[exp.length - 1];
+        check((await page.$$('.hl-block.ml-reveal')).length === 0, `L${level}: right block revealed after the first miss`);
+        // second miss on the same question: feedback again, logged once.
+        await clickBlock(s, s.blocks.find((b) => !ids.includes(b.id)).id);
+        await page.click('.hl-ok');
+        check((await fbSince(page, fb0 + 1, 1))[0] === 'bad', `L${level}: second wrong answer gave no error feedback`);
+        check((await attempts()).length === before + 1, `L${level}: second miss logged again`);
+        const rb = await page.$$eval('.hl-block.ml-reveal', (b) => b.map((x) => x.dataset.id).sort());
+        check(same(rb, [...ids].sort()), `L${level}: reveal after the second miss ${rb} vs ${ids}`);
+        await page.waitForFunction(() => window.__test.state().slots.filter((x) => !x.given && !x.placed).length === 1, null, { timeout: 8000 }).catch(() => {});
         await clickBlock(s, ids[0]);
       } else {
         check(await page.locator('.hl-ok').isDisabled(), `L${level}: confirm disabled while a slot is empty`);
@@ -187,32 +228,61 @@ for (const level of levels(8)) {
     }
     const nxt = await waitNew(s.qid);
     check(!!nxt, `L${level} round ${round}: no next question`);
-    const mine = (await attempts()).slice(before);
-    const skill = level <= 5 ? 'theory.harmony' : 'theory.jazz';
-    check(mine.length === 1 && mine[0].ok === (round !== 0) && mine[0].level === level && mine[0].item === s.item && mine[0].skill === skill, `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.level, a.skill]))}`);
+    const mine = await newAttempts(page, SLUG, before, 1);
+    const skill = taxSkill(SLUG, level);
+    check(mine.length === 1 && mine[0].game === SLUG && mine[0].ok === (round !== 0) && mine[0].level === level && mine[0].item === s.item && mine[0].skill === skill, `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.level, a.skill]))}`);
   }
-  check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
+  check(!(await overflows(page)), `L${level}: overflow`);
   check(await page.evaluate(() => [...document.querySelectorAll('.hl-row, .hl-tray, .hl-slot, .hl-block')].every((e) => { const r = e.getBoundingClientRect(); return r.left >= -0.5 && r.right <= 390.5; })), `L${level}: block outside the screen`);
   console.log(`L${level}`, [...seen].join(' '));
 }
 
+// Level 6 has 7 items: natural questions never repeat the previous one. Level 1 and the last level: a clean streak of 8.
+await open(6);
+{
+  const order = [];
+  for (let r = 0; r < rounds(10, 3); r++) {
+    const x = await st();
+    order.push(x.item);
+    await solve(x);
+    await waitNew(x.qid);
+  }
+  check(!order.some((x, i) => i && x === order[i - 1]), `L6: same question twice in a row ${order}`);
+}
+// fast: level 1 only (the last level's "nothing offered, celebration" check is full-only: 8 more solved questions)
+for (const level of FAST ? [1] : [1, 2, 3, 4, 5, 6, 7, 8]) {
+  await open(level);
+  for (let r = 0; r < 8; r++) {
+    const x = await st();
+    await solve(x);
+    await waitNew(x.qid);
+  }
+  if (level < 8) {
+    check(await nextBtnShown(), `L${level}: no next-level button after 8 clean questions`);
+    if (level === 1) { await page.click('.hl-next'); await page.waitForFunction(() => window.__test.state().level === 2, null, { timeout: 8000 }).catch(() => {}); check((await st()).level === 2, 'L1: next-level button did not change the level'); }
+  } else {
+    check(!(await nextBtnShown()), 'L8: next-level offered on the last level');
+    check((await fbLog(page)).includes('level'), 'L8: no celebration after 8 clean questions');
+  }
+}
+// settings persist: level and tempo
+await persistCheck({ page, url: base, slug: SLUG, fields: [[0, 'level', 6], [1, 'tempo', 90]], check, applied: async (p) => { const x = await p.evaluate(() => window.__test.state()); return x.level === 6 && x.item.startsWith('iiVI:') ? '' : `level ${x.level} item ${x.item}`; } });
 // English, dark: the words of level 2.
 const ctx2 = await browser.newContext({ viewport: { width: 390, height: 780 }, colorScheme: 'dark', locale: 'en-US' });
 const p2 = await ctx2.newPage();
-p2.on('pageerror', (e) => errors.push(String(e)));
-p2.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+C.watch(p2);
 await p2.goto(base);
 await p2.evaluate(() => localStorage.setItem('ml:settings:harmony-lab', JSON.stringify({ level: 2, tempo: 110 })));
 await p2.reload();
 await p2.click('.ml-start');
-await p2.waitForTimeout(400);
+await p2.waitForFunction(() => window.__test?.state());
 const words = await p2.locator('.hl-tray .hl-txt').allTextContents();
 check(same(words, ['tonic', 'subdominant', 'dominant']), `EN words ${words}`);
 if (dir) await p2.screenshot({ path: `${dir}/hl-en-dark.png` });
 await ctx2.close();
 
 function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
-check(!errors.length, 'console: ' + errors.join(' | '));
+check(!C.errors.length, 'console: ' + C.errors.join(' | '));
 await browser.close();
-console.log(failed ? `${failed} failure(s)` : 'all good');
-process.exit(failed ? 1 : 0);
+console.log(C.failed ? `${C.failed} failure(s)` : 'all good');
+process.exit(C.failed ? 1 : 0);

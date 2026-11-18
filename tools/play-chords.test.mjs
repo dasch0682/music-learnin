@@ -1,6 +1,7 @@
 // Plays every level of Play the chord with real pointer events on the keys: a wrong chord, then right ones.
 // Usage: npx vite --port 5303 --strictPort &   then   PORT=5303 node tools/play-chords.test.mjs [screenshot-dir]
 import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { smoke, skillOf, setField, closeSettings, persistCheck, readAttempts } from './lib/shared-b.mjs';
 const ID = 'play-chords';
 const base = `http://localhost:${process.env.PORT || 5303}/${ID}/`;
 const dir = process.argv[2];
@@ -11,7 +12,7 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const attempts = () => page.evaluate((id) => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === id).sort((x, y) => x.t - y.t)); }; }), ID);
+const attempts = () => readAttempts(page, ID);
 const state = () => page.evaluate(() => window.__test.state());
 const mod = (n, m) => ((n % m) + m) % m;
 
@@ -60,6 +61,32 @@ async function setup(level, lang, theme) {
 }
 const settle = () => page.waitForFunction(() => { const s = window.__test.state(); return !s.locked && s.step === 0 && !s.latched.length; }, null, { timeout: 10000 }).catch(async (e) => { console.log('STATE', JSON.stringify(await state())); throw e; });
 
+// Pure content check of a generated question (no DOM): chords allowed at the level, pitch classes, bass, window fits a voicing.
+function content(level, s) {
+  const tag = `L${level} ${s.item}`;
+  const cad = level >= 6;
+  let want;
+  if (cad) {
+    check(!!CAD[s.cad] && s.item === s.cad, `${tag}: cadence`);
+    check(level === 6 ? s.cad !== 'iiVI' && [0, 7, 5].includes(s.key) : s.cad === 'iiVI' && [0, 5, 10, 7, 3, 2].includes(s.key), `${tag}: ${s.cad} in key ${s.key}`);
+    want = CAD[s.cad].map(([off, t]) => ({ root: mod(s.key + off, 12), type: t, inv: 0 }));
+    check(JSON.stringify(s.chords) === JSON.stringify(want), `${tag}: chords ${JSON.stringify(s.chords)}`);
+  } else {
+    want = s.chords.map((c) => ({ root: c.root, type: c.type, inv: c.inv }));
+    check(want.length === 1 && ALLOWED[level](want[0].root, want[0].type, want[0].inv), `${tag}: unexpected chord ${JSON.stringify(want)}`);
+    check(s.item === want[0].type + (want[0].inv ? ':inv' + want[0].inv : ''), `${tag}: item`);
+  }
+  want.forEach((w, i) => {
+    const pcs = pcsOf(w.root, w.type);
+    check(JSON.stringify(s.pcs[i]) === JSON.stringify(pcs) && s.bass[i] === (w.inv ? pcs[w.inv] : null), `${tag}: pcs/bass ${s.pcs[i]} ${s.bass[i]}`);
+    check(s.names[i] && nameOk(s.names[i], w.root), `${tag}: name ${s.names[i]} for root ${w.root}`);
+    try { voice(pcs, pcs[w.inv || 0], s.win[0], s.win[1], !!w.inv); } catch (e) { check(false, `${tag}: ${e.message}`); }
+  });
+  const whites = []; for (let m = s.win[0]; m <= s.win[1]; m++) if ([0, 2, 4, 5, 7, 9, 11].includes(mod(m, 12))) whites.push(m);
+  check(whites.length <= 12 && [0, 2, 4, 5, 7, 9, 11].includes(mod(s.win[0], 12)) && [0, 2, 4, 5, 7, 9, 11].includes(mod(s.win[1], 12)), `${tag}: window ${s.win} (${whites.length} white keys)`);
+}
+
+await smoke({ browser, url: base, check });
 await page.goto(base);
 for (const level of levels(7)) {
   await setup(level, 'fr', 'light');
@@ -129,8 +156,24 @@ for (const level of levels(7)) {
     await page.waitForTimeout(150);
     const mine = (await attempts()).slice(before);
     const exp = expectWrong ? [false, true] : [true];
-    check(mine.map((a) => a.ok).join() === exp.join() && mine.every((a) => a.skill === (cad ? 'play.cadence' : 'play.chords') && a.level === level && a.item === s.item), `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.skill, a.level, a.item]))}`);
+    check(mine.map((a) => a.ok).join() === exp.join() && mine.every((a) => a.skill === skillOf(ID, level) && a.level === level && a.item === s.item), `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.skill, a.level, a.item]))}`);
     await settle();
+  }
+  // Many more generated questions: a settings change draws a new one (never the same chord twice in a row).
+  const items = new Set(), roots = new Set(), chordsSeen = new Set();
+  let prev = JSON.stringify((await state()).chords);
+  for (let i = 0; i < rounds(level === 1 ? 12 : 60, 6); i++) {
+    await setField(page, 1, i % 2 === 0);
+    await page.waitForFunction((p) => JSON.stringify(window.__test.state().chords) !== p, prev, { timeout: 8000 }).catch(() => check(false, `L${level}: no new chord after a settings change (or the same chord twice)`));
+    const t = await state();
+    prev = JSON.stringify(t.chords);
+    content(level, t);
+    items.add(t.item); roots.add(t.chords[0].root); chordsSeen.add(JSON.stringify(t.chords));
+  }
+  await closeSettings(page);
+  if (!FAST) {
+    const ok = { 1: chordsSeen.size >= 3, 2: chordsSeen.size >= 6, 3: chordsSeen.size >= 12, 4: items.size >= 6, 5: items.size >= 3, 6: items.size >= 4, 7: chordsSeen.size >= 5 }[level];
+    check(ok, `L${level}: only ${[...items]} / ${chordsSeen.size} distinct chords after sampling`);
   }
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   console.log(`L${level}`, [...seen].join(' '));
@@ -159,6 +202,10 @@ for (let r = 0; r < 5; r++) {
 check(await page.isVisible('.pc-offer:not(.pc-off)'), 'next level button not shown after a clean streak');
 await page.click('.pc-offer');
 await page.waitForFunction(() => window.__test.state().level === 3 && !window.__test.state().locked);
+// The labels setting writes the note names on the keys, is saved, and still applies after a reload.
+await setup(3, 'fr', 'light');
+check((await page.$$eval('.pc-kb .ml-white', (e) => e.every((x) => !x.textContent.trim()))), 'labels shown by default');
+await persistCheck({ page, url: base, slug: ID, fields: [[1, 'labels', true]], check, applied: async (pg) => ((await pg.$$eval('.pc-kb .ml-white', (e) => e.length && e.every((x) => x.textContent.trim()))) ? '' : 'no key labels') });
 check(!errors.length, 'console: ' + errors.join(' | '));
 await browser.close();
 console.log(failed ? `${failed} failure(s)` : 'all good');

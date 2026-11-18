@@ -1,6 +1,7 @@
 // Plays every level of Write the rhythm: a wrong bar (twice at round 1), then the right one. Recomputes the rules from the item id.
 // Usage: npx vite --port 5404 --strictPort &   then   PORT=5404 node tools/rhythm-dictation.test.mjs [screenshot-dir]
 import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { smoke, skillOf, setField, closeSettings, persistCheck, readAttempts, newAttempts, recordAudio, playedNotes, waitPlayed } from './lib/shared-b.mjs';
 const base = `http://localhost:${process.env.PORT || 5404}/rhythm-dictation/`;
 const dir = process.argv[2];
 const browser = await launch();
@@ -10,7 +11,7 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'rhythm-dictation').sort((x, y) => x.t - y.t)); }; }));
+const attempts = () => readAttempts(page, 'rhythm-dictation');
 const state = () => page.evaluate(() => window.__test.state());
 
 // Own copy of the music facts: length in quarters and note/rest events of each cell.
@@ -61,6 +62,8 @@ const btn = (id) => `.rd-pbtn[data-cell="${id}"]`;
 async function enter(list) { for (const id of list) await page.click(btn(id)); }
 async function settle() { await page.waitForFunction(() => window.__test.state().marks); }
 
+await smoke({ browser, url: base, check });
+await recordAudio(page);
 await page.goto(base);
 for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:rhythm-dictation', JSON.stringify({ level: l, tempo: 120 })), level);
@@ -96,14 +99,33 @@ for (const level of levels(6)) {
         await enter(s.cells.slice(k2));
       } else await enter(s.cells.slice(keep));
     } else await enter(s.cells);
-    await settle();
-    const done = await state();
+    // read the state in the same evaluate that sees the marks: a right answer moves on by itself a few hundred ms later (260 ms in fast mode)
+    const done = await (await page.waitForFunction(() => { const t = window.__test.state(); return t.marks && t; })).jsonValue();
     check(done.marks.every(Boolean) && done.entered.join('-') === s.cells.join('-'), `L${level} round ${round}: final ${done.entered} vs ${s.cells}`);
     if (dir && round === 2 && level === 6) await page.screenshot({ path: `${dir}/rd-6-fr.png` });
-    await page.waitForTimeout(1700);
-    const mine = (await attempts()).slice(before);
-    check(mine.length === 1 && mine[0].ok === (round > 1) && mine[0].level === level && mine[0].item === s.item && mine[0].skill === 'rhythm.dictation', `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.level, a.skill]))}`);
+    const mine = await newAttempts(page, 'rhythm-dictation', before);
+    await page.waitForFunction(() => { const t = window.__test.state(); return t.marks === null && !t.locked; }, null, { timeout: 8000 });
+    check(mine.length === 1 && mine[0].ok === (round > 1) && mine[0].level === level && mine[0].item === s.item && mine[0].skill === skillOf('rhythm-dictation', level), `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.level, a.skill]))}`);
   }
+  // Many more generated bars: a settings change (tempo) draws a new one; the model sounds as written.
+  for (let i = 0; i < rounds(60, 8); i++) {
+    await page.evaluate(() => document.querySelector('.rd-pbtn')?.setAttribute('data-old', '1')); // the palette is rebuilt with the new question
+    await playedNotes(page);
+    await setField(page, 1, 120 - (i % 2) * 5);
+    await page.waitForFunction(() => !document.querySelector('.rd-pbtn[data-old]') && !window.__test.state().locked, null, { timeout: 8000 }).catch(() => check(false, `L${level}: no new bar after a settings change`));
+    const t = await state();
+    rules(level, t); seen.add(t.item);
+    if (i < rounds(6, 2)) { // the model, as heard: one onset per note, spaced as written, after one bar of count-in
+      const perQ = 60 / (120 - (i % 2) * 5) / (level === 6 ? 1.5 : 1);
+      // rests: the cell 'r' is one quarter of silence
+      const evs2 = []; let p2 = 0;
+      for (const id of t.cells) { if (id === 'r') { p2 += 1; continue; } for (const e of CELL[id]) { evs2.push(p2); p2 += e[0]; } }
+      const got = (await waitPlayed(page, evs2.length + 1, 12000)).filter((x) => x.midi === 62);
+      check(got.length === evs2.length && got.every((g, k) => Math.abs((g.when - got[0].when) - (evs2[k] - evs2[0]) * perQ) < 0.03), `L${level}: model onsets ${JSON.stringify(got.map((g) => +(g.when - got[0].when).toFixed(3)))} vs ${JSON.stringify(evs2.map((x) => +(x * perQ).toFixed(3)))}`);
+    }
+  }
+  await closeSettings(page);
+  if (!FAST) check(seen.size >= (level === 1 ? 4 : 6), `L${level}: only ${seen.size} different bars after sampling`);
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   console.log(`L${level}`, seen.size, 'patterns');
 }
@@ -120,7 +142,7 @@ check((await state()).entered.length === 0, 'undo removes the cell');
 for (let i = 0; i < 6; i++) {
   const s = await state();
   await enter(s.cells);
-  await page.waitForTimeout(2700);
+  await page.waitForFunction(() => { const t = window.__test.state(); return t.marks === null && !t.locked && !t.entered.length; }, null, { timeout: 10000 });
 }
 check(await page.$eval('.rd-next', (e) => e.classList.contains('rd-show')), 'next-level button after a clean streak');
 await page.click('.rd-next');
@@ -137,6 +159,18 @@ const es = await en.evaluate(() => window.__test.state());
 for (const id of es.cells.slice(0, 3)) await en.click(btn(id));
 if (dir) await en.screenshot({ path: `${dir}/rd-5-en-dark.png` });
 check(!(await en.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), 'EN L5 overflow');
+// Tempo: saved, still applied after a reload (the model is played at that speed).
+await page.evaluate(() => localStorage.setItem('ml:settings:rhythm-dictation', JSON.stringify({ level: 1, tempo: 120 })));
+await page.reload();
+await page.click('.ml-start');
+await persistCheck({ page, url: base, slug: 'rhythm-dictation', fields: [[1, 'tempo', 60]], check });
+{
+  const t = await state();
+  const evs = []; let p = 0;
+  for (const id of t.cells) { if (id === 'r') { p += 1; continue; } for (const e of CELL[id]) { evs.push(p); p += e[0]; } }
+  const got = (await waitPlayed(page, evs.length + 1, 15000)).filter((x) => x.midi === 62);
+  check(got.length === evs.length && got.every((g, k) => Math.abs((g.when - got[0].when) - (evs[k] - evs[0]) * 1) < 0.03), `tempo 60 after reload: onsets ${JSON.stringify(got.map((g) => +(g.when - got[0].when).toFixed(3)))} for ${evs}`);
+}
 check(!errors.length, 'console: ' + errors.join(' | '));
 await browser.close();
 console.log(failed ? `${failed} failure(s)` : 'all good');

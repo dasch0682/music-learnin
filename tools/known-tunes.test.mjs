@@ -1,18 +1,17 @@
 // Plays every level of Tunes you know with real pointer events: a wrong key, then the right ones.
 // Usage: npx vite --port 5406 --strictPort &   then   PORT=5406 node tools/known-tunes.test.mjs [screenshot-dir]
-import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { launch, FAST, rounds, levels } from './lib/harness.mjs';
+import { skillOf, makeChecker, smoke, persistCheck, readAttempts, newAttempts, fbLog, fbSince, isShown } from './lib/shared-a.mjs';
 import { TUNES } from '../apps/known-tunes/tunes.js';
 const ID = 'known-tunes';
-const base = `http://localhost:${process.env.PORT || 5406}/${ID}/`;
+const base = `http://localhost:${process.env.PORT || 5220}/${ID}/`;
 const dir = process.argv[2];
+const C = makeChecker();
 const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR', hasTouch: true });
-const errors = [];
-page.on('pageerror', (e) => errors.push(String(e)));
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-let failed = 0;
-const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const attempts = () => page.evaluate((id) => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === id).sort((x, y) => x.t - y.t)); }; }), ID);
+C.watch(page);
+const check = C.check;
+const attempts = () => readAttempts(page, ID);
 const state = () => page.evaluate(() => window.__test.state());
 
 // Scale degrees written by hand (major scale; "-" = octave below, "'" = octave above), independent from the app's MIDI lists.
@@ -70,6 +69,7 @@ async function setup(level, lang, theme) {
 }
 const waitAnswer = (cond) => page.waitForFunction((c) => { const s = window.__test.state(); return s.state === 'answer' && (!c || (s.tune !== c.tune || s.phrase !== c.phrase)); }, cond || null, { timeout: 20000 });
 
+await smoke({ browser, url: base, check });
 await page.goto(base);
 for (const level of levels(6)) {
   await setup(level, 'fr', 'light');
@@ -102,21 +102,30 @@ for (const level of levels(6)) {
       for (let i = 0; i < s.expected.length; i++) {
         if (t === 0 && p === 0 && i === 1) {
           const wrong = [s.expected[1] + 1, s.expected[1] - 1].find((m) => m >= s.win[0] && m <= s.win[1] && m !== s.expected[1]);
+          const fb0 = (await fbLog(page)).length;
+          // the flash is short-lived (divided by the fast clock): record it with an observer
+          await page.evaluate(() => { window.__bad = 0; new MutationObserver((ms) => ms.forEach((m) => { if (m.target.classList.contains('ml-bad')) window.__bad++; })).observe(document.querySelector('.ml-keyboard'), { attributes: true, attributeFilter: ['class'], subtree: true }); });
           await tapKey(wrong);
-          const bad = await page.$$eval('.ml-keyboard .ml-bad', (e) => e.length);
-          check(bad === 1, `L${level}: wrong key did not flash`);
+          await page.waitForFunction(() => window.__bad, null, { timeout: 3000 }).catch(() => {});
+          check((await page.evaluate(() => window.__bad)) >= 1, `L${level}: wrong key did not flash`);
+          check((await fbSince(page, fb0, 1))[0] === 'bad', `L${level}: wrong key gave no error feedback`);
           await waitAnswer();
           const st = await state();
           check(st.pos === 0 && st.phrase === 0, `L${level}: after wrong key pos ${st.pos}`);
+          // second miss on the same phrase: feedback again, nothing more logged
+          const n1 = (await attempts()).length;
+          await tapKey(wrong);
+          check((await fbSince(page, fb0 + 1, 1))[0] === 'bad', `L${level}: second wrong key gave no error feedback`);
+          await waitAnswer();
+          check((await attempts()).length === n1, `L${level}: second miss logged again`);
           for (let j = 0; j < 2; j++) await tapKey(s.expected[j]);
           continue;
         }
         await tapKey(s.expected[i]);
       }
-      await page.waitForTimeout(250);
-      const mine = (await attempts()).slice(before);
       const exp = t === 0 && p === 0 ? [false, true] : [true];
-      check(mine.map((a) => a.ok).join() === exp.join() && mine.every((a) => a.skill === 'play.tunes' && a.level === level && a.item === id && a.detail.phrase === p), `L${level} ${id} p${p}: ${JSON.stringify(mine.map((a) => [a.ok, a.skill, a.level, a.item, a.detail?.phrase]))}`);
+      const mine = await newAttempts(page, ID, before, exp.length);
+      check(mine.map((a) => a.ok).join() === exp.join() && mine.every((a) => a.game === ID && a.skill === skillOf(ID, level) && a.level === level && a.item === id && a.detail.phrase === p), `L${level} ${id} p${p}: ${JSON.stringify(mine.map((a) => [a.ok, a.skill, a.level, a.item, a.detail?.phrase]))}`);
       const after = await state();
       if (level <= 2) check(after.nameShown && after.name.length > 3, `L${level}: name not shown after success`);
       else check(after.name === '', `L${level}: name shown "${after.name}"`);
@@ -131,7 +140,7 @@ for (const level of levels(6)) {
 // Each new tune, forced through the test hook at level 3 (whole tune, no transposition): every phrase, then a wrong key.
 await setup(3, 'en', 'light');
 await waitAnswer();
-for (const id of rounds(["amazing-grace", "pont-avignon", "bon-tabac", "alouette", "greensleeves"], ["amazing-grace", "greensleeves"])) {
+for (const id of rounds(["amazing-grace", "pont-avignon", "bon-tabac", "alouette", "greensleeves"], ["greensleeves"])) { // fast: one of the new tunes
   await page.evaluate((x) => window.__test.force(x), id);
   await page.waitForFunction((x) => { const s = window.__test.state(); return s.state === 'answer' && s.tune === x && s.phrase === 0; }, id, { timeout: 20000 });
   for (let p = 0; p < DEG[id].length; p++) {
@@ -146,9 +155,8 @@ for (const id of rounds(["amazing-grace", "pont-avignon", "bon-tabac", "alouette
       await waitAnswer();
     }
     for (const m of s.expected) await tapKey(m);
-    await page.waitForTimeout(250);
-    const mine = (await attempts()).slice(before);
-    check(mine.map((a) => a.ok).join() === (p === 0 ? 'false,true' : 'true') && mine.every((a) => a.item === id && a.level === 3 && a.detail.phrase === p), `new ${id} p${p}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.detail?.phrase]))}`);
+    const mine = await newAttempts(page, ID, before, p === 0 ? 2 : 1);
+    check(mine.map((a) => a.ok).join() === (p === 0 ? 'false,true' : 'true') && mine.every((a) => a.skill === skillOf(ID, 3) && a.item === id && a.level === 3 && a.detail.phrase === p), `new ${id} p${p}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.detail?.phrase]))}`);
     if (p < DEG[id].length - 1) await waitAnswer({ tune: id, phrase: p });
   }
   console.log('new', id, 'ok');
@@ -158,18 +166,43 @@ await page.evaluate(() => window.__test.force(null));
 // Clean streak offers the next level with one tap (English, dark).
 await setup(1, 'en', 'dark');
 await waitAnswer();
+const order = [];
 for (let r = 0; r < 6; r++) {
   const s = await state();
+  order.push(s.tune);
+  const n0 = (await attempts()).length;
   for (const m of s.expected) await tapKey(m);
-  await page.waitForTimeout(200);
+  await newAttempts(page, ID, n0, 1);
   await waitAnswer({ tune: s.tune, phrase: s.phrase });
 }
+check(!order.some((x, i) => i && x === order[i - 1]), `same tune twice in a row ${order}`);
 if (dir) await page.screenshot({ path: `${dir}/kt-en-dark.png` });
 check(await page.isVisible('.tn-next button'), 'next level button not shown after a clean streak');
 await page.click('.tn-next button');
 await waitAnswer();
 check((await state()).level === 2, 'next level button did not change the level');
-check(!errors.length, 'console: ' + errors.join(' | '));
+// Last level: a clean streak offers nothing (no next-level button, no celebration); short tune forced to keep it cheap.
+// Full only (six more real answers; fast mode does not play the last-level streak).
+if (!FAST) {
+await setup(6, 'fr', 'light');
+await waitAnswer();
+await page.evaluate(() => window.__test.force('au-clair'));
+await page.waitForFunction(() => { const s = window.__test.state(); return s.state === 'answer' && s.tune === 'au-clair' && s.phrase === 0; }, null, { timeout: 20000 });
+const f0 = (await fbLog(page)).length;
+for (let r = 0; r < 6; r++) {
+  const s = await state();
+  const n0 = (await attempts()).length;
+  for (const m of s.expected) await tapKey(m);
+  await newAttempts(page, ID, n0, 1);
+  await waitAnswer({ tune: s.tune, phrase: s.phrase });
+}
+check(!(await isShown(page, '.tn-next button')), 'L6: next-level button offered on the last level');
+check(!(await fbLog(page)).slice(f0).includes('level'), 'L6: level-up celebration on the last level');
+}
+// settings persist: level, tempo
+await setup(1, 'fr', 'light');
+await persistCheck({ page, url: base, slug: ID, fields: [[0, 'level', 5], [1, 'tempo', 100]], check, start: true, applied: async (p) => { await p.waitForFunction(() => window.__test.state().state === 'answer', null, { timeout: 20000 }); const st = await p.evaluate(() => window.__test.state()); return st.level === 5 ? '' : `level ${st.level}`; } });
+check(!C.errors.length, 'console: ' + C.errors.join(' | '));
 await browser.close();
-console.log(failed ? `${failed} failure(s)` : 'all good');
-process.exit(failed ? 1 : 0);
+console.log(C.failed ? `${C.failed} failure(s)` : 'all good');
+process.exit(C.failed ? 1 : 0);

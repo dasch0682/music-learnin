@@ -24,3 +24,4 @@
 .ml-round svg { width: 28px; height: 28px; }
 .cf-next { visibility: hidden; }
 .cf-next.cf-show { visibility: visible; }
+.cf-seg.ml-reveal path { stroke: var(--good); stroke-width: 4; stroke-dasharray: 6 4; }

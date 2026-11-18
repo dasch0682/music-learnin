@@ -105,6 +105,7 @@ const GOALS = {
 const PLAY = '<svg viewBox="0 0 64 64" width="28" height="28" fill="currentColor" aria-hidden="true"><path d="M22 12v40l32-20z"/></svg>';
 
 // ---------- the screen ----------
+let revealIds = null; // tray blocks to show as the right answer after the 2nd miss (null: none)
 let q = null, started = 0, streak = 0, last = null, missed = false, locked = false, seq = 0, quietUntil = 0, timer = 0, qid = 0;
 const test = { last: null };
 const prompt = h('p', { className: 'ml-prompt hl-prompt' });
@@ -200,6 +201,7 @@ function render() {
   tray.replaceChildren(...q.blocks.map((b) => {
     const el = h('button', { className: 'ml-btn hl-block' }, ...faceOf(b));
     el.dataset.id = b.id;
+    if (revealIds?.has(b.id)) el.classList.add('ml-reveal');
     el.onclick = () => tapBlock(b);
     return el;
   }));
@@ -369,6 +371,7 @@ async function next() {
   q.qid = ++qid;
   q.blocks = shuffle(q.blocks);
   missed = false;
+  revealIds = null;
   locked = false;
   render();
   quietUntil = 0;
@@ -431,7 +434,9 @@ function confirm() {
     succeed(q.mode === 'scale' ? 1300 : (q.slots.length + 1.5) * beat() * 1000);
     return;
   }
+  const second = missed;
   fail(bad.map((s) => s.placed.id).join(','));
+  if (second) revealIds = new Set(bad.flatMap((s) => [...s.valid])); // 2nd miss: show the right blocks
   render();
   timer = setTimeout(() => {
     bad.forEach((s) => { s.placed = null; s.status = null; });
@@ -448,7 +453,9 @@ function tapLabel(b) {
     if (q.step >= q.slots.length) { quietUntil = 0; hear(); return succeed((q.slots.length + 1.5) * beat() * 1000); }
     render();
   } else {
+    const second = missed;
     fail(b.fam);
+    if (second) revealIds = new Set([s.given.fam]); // 2nd miss: show the right block
     s.status = 'wrong';
     render();
     timer = setTimeout(() => { s.status = null; render(); }, 600);

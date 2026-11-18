@@ -1,6 +1,7 @@
 // Plays every level of Play the scale with real pointer events on the keys: a wrong note, then the right ones.
 // Usage: npx vite --port 5303 --strictPort &   then   PORT=5303 node tools/play-scales.test.mjs [screenshot-dir]
 import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { smoke, skillOf, setField, closeSettings, persistCheck, readAttempts } from './lib/shared-b.mjs';
 const ID = 'play-scales';
 const base = `http://localhost:${process.env.PORT || 5303}/${ID}/`;
 const dir = process.argv[2];
@@ -11,7 +12,7 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const attempts = () => page.evaluate((id) => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === id).sort((x, y) => x.t - y.t)); }; }), ID);
+const attempts = () => readAttempts(page, ID);
 const state = () => page.evaluate(() => window.__test.state());
 
 // Theory, written by hand (semitones above the tonic), independent from the game code.
@@ -44,6 +45,7 @@ async function setup(level, lang, theme, model) {
   await page.waitForFunction(() => window.__test.state().expected.length && !window.__test.state().locked, null, { timeout: 15000 });
 }
 
+await smoke({ browser, url: base, check });
 await page.goto(base);
 for (const level of levels(6)) {
   await setup(level, 'fr', 'light', false);
@@ -88,9 +90,32 @@ for (const level of levels(6)) {
     await page.waitForTimeout(150);
     const mine = (await attempts()).slice(before);
     const exp = round === 0 ? [false, true] : [true];
-    check(mine.map((a) => a.ok).join() === exp.join() && mine.every((a) => a.skill === 'play.scales' && a.level === level && a.item === s.item), `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.skill, a.level, a.item]))}`);
+    check(mine.map((a) => a.ok).join() === exp.join() && mine.every((a) => a.skill === skillOf(ID, level) && a.level === level && a.item === s.item), `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.skill, a.level, a.item]))}`);
     await page.waitForFunction((it) => { const t = window.__test.state(); return !t.locked && t.idx === 0 && t.item !== undefined; }, null, { timeout: 5000 });
     await page.waitForTimeout(100);
+  }
+  // Many more generated scales: a settings change (labels) draws a new one; never the same scale twice in a row.
+  const kinds = new Set(), tonics = new Set();
+  let prev = (await state()).item;
+  for (let i = 0; i < rounds(level === 6 ? 60 : 40, 6); i++) {
+    await page.evaluate(() => document.querySelector('.ps-dot')?.setAttribute('data-old', '1')); // paint() replaces the dots of a new question
+    await setField(page, 4, i % 2 === 0);
+    await page.waitForFunction(() => !document.querySelector('.ps-dot[data-old]') && !window.__test.state().locked, null, { timeout: 8000 }).catch(() => check(false, `L${level}: no new scale after a settings change`));
+    const t = await state();
+    prev = t.item;
+    const al = ALLOWED[level];
+    check(al.scales.includes(t.scale) && (!al.tonics || al.tonics.includes(t.tonic)), `L${level}: unexpected ${t.item}`);
+    const want = expectedFor(level, t.scale, t.tonic);
+    check(JSON.stringify(want) === JSON.stringify(t.expected), `L${level} ${t.item}: expected ${t.expected} want ${want}`);
+    const whites = []; for (let m = t.win[0]; m <= t.win[1]; m++) if ([0, 2, 4, 5, 7, 9, 11].includes(((m % 12) + 12) % 12)) whites.push(m);
+    check(whites.length <= 12 && want.every((m) => m >= t.win[0] && m <= t.win[1]), `L${level} ${t.item}: window ${t.win}`);
+    // the tonic is the first and the last note, the scale rises by the stated steps and (levels 2+) comes back down
+    check(t.expected[0] === 60 + t.tonic && (level === 1 || t.expected.at(-1) === 60 + t.tonic), `L${level} ${t.item}: starts/ends on the tonic`);
+    kinds.add(t.scale); tonics.add(t.tonic);
+  }
+  await closeSettings(page);
+  if (!FAST) {
+    check(kinds.size >= ALLOWED[level].scales.length && tonics.size >= (ALLOWED[level].tonics ? ALLOWED[level].tonics.length : 8), `L${level}: only ${[...kinds]} / tonics ${[...tonics]}`);
   }
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   console.log(`L${level}`, [...seen].join(' '));
@@ -115,6 +140,21 @@ await page.click('.ps-offer');
 await page.waitForFunction(() => window.__test.state().level === 2 && !window.__test.state().locked);
 check((await state()).level === 2, 'next level button did not change the level');
 
+// Settings: instrument, labels and the model toggle are saved, applied and survive a reload.
+await setup(2, 'fr', 'light', true);
+await persistCheck({
+  page, url: base, slug: ID, fields: [[2, 'instrument', 'Bb'], [3, 'model', false], [4, 'labels', true]], check,
+  applied: async (pg) => {
+    const st = await pg.evaluate(() => window.__test.state());
+    const labels = await pg.$$eval('.ps-kb .ml-white', (e) => e.length && e.every((x) => x.textContent.trim()));
+    return st.shift !== -2 ? `shift ${st.shift}` : !labels ? 'no key labels' : '';
+  },
+});
+await page.waitForFunction(() => !window.__test.state().locked, null, { timeout: 8000 });
+check((await state()).idx === 0 && !(await state()).locked, 'model off: keyboard locked at start');
+await setField(page, 2, 'C'); await setField(page, 4, false); await setField(page, 3, true);
+await closeSettings(page);
+
 // Microphone input: injected pitches (any octave, transposing instrument), a wrong note, and a still-ringing note not counting twice.
 const feedFor = async (midi, ms) => { for (let t = 0; t < ms; t += 40) { await page.evaluate((m) => window.__test.feed(m), midi); await page.waitForTimeout(40); } };
 async function micSetup(level, instrument) {
@@ -131,6 +171,9 @@ for (const [instrument, shift] of combos([['Bb', -2], ['C', 0], ['Eb', -9]])) { 
   check(s.shift === shift, `mic ${instrument}: shift ${s.shift}`);
   check(await page.$('.ps-meter') !== null, 'mic: no meter');
   const before = (await attempts()).length;
+  // Silence gives no answer, not even a wrong one.
+  await feedFor(null, FAST ? 900 : 1500);
+  check((await state()).idx === 0 && !(await state()).wrongLogged && (await attempts()).length === before, 'mic: silence counted as an answer');
   // Short note (under 0.4 s) does not count.
   await feedFor(s.expected[0] + shift, 120);
   check((await state()).idx === 0, 'mic: a short note counted');
@@ -148,10 +191,27 @@ for (const [instrument, shift] of combos([['Bb', -2], ['C', 0], ['Eb', -9]])) { 
   }
   await page.waitForTimeout(200);
   const mine = (await attempts()).slice(before);
-  check(mine.map((a) => a.ok).join() === 'false,true' && mine.every((a) => a.skill === 'play.scales' && a.level === 2), `mic ${instrument}: ${JSON.stringify(mine.map((a) => [a.ok, a.level]))}`);
+  check(mine.map((a) => a.ok).join() === 'false,true' && mine.every((a) => a.skill === skillOf(ID, 2) && a.level === 2), `mic ${instrument}: ${JSON.stringify(mine.map((a) => [a.ok, a.level]))}`);
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), 'mic: overflow');
   if (dir && instrument === 'Bb') await page.screenshot({ path: `${dir}/ps-mic.png` });
   await page.waitForFunction(() => !window.__test.state().locked && window.__test.state().idx === 0, null, { timeout: 5000 });
+}
+// Microphone shut while the model plays (the app must not hear itself): a right pitch fed during the model does nothing.
+{
+  await page.evaluate(([id]) => localStorage.setItem('ml:settings:' + id, JSON.stringify({ level: 1, model: true, input: 'mic', instrument: 'C' })), [ID]);
+  await page.reload();
+  await page.click('.ml-start');
+  await page.waitForFunction(() => window.__test.state().expected.length, null, { timeout: 15000 });
+  const s = await state();
+  if (s.micMode) {
+    check(s.locked && !s.listening, `mic: listening while the model plays (${JSON.stringify({ l: s.locked, li: s.listening })})`);
+    await feedFor(s.expected[0], 700);
+    check((await state()).idx === 0 && (await state()).hold === 0, 'mic: heard itself during the model');
+    await page.waitForFunction(() => !window.__test.state().locked, null, { timeout: 15000 });
+    await page.waitForFunction(() => window.__test.state().listening, null, { timeout: 3000 });
+    await feedFor(s.expected[0], 650);
+    check((await state()).idx === 1, 'mic: note after the model not heard');
+  }
 }
 check(!errors.length, 'console: ' + errors.join(' | '));
 await browser.close();

@@ -1,19 +1,21 @@
+// Make a tune (sandbox, no levels, nothing judged): every scale's rows, toggling, playback order, chord layer (cycling), slots, reload,
+// export / import (and a refused file), settings persistence (scale, tempo, chords), nothing logged, smoke in both themes and languages.
 // Tests Make a tune: toggling, playback order, chords, scales, slots, reload, export / import, nothing logged.
 // Usage: npx vite --port 5406 --strictPort &   then   PORT=5406 node tools/compose.test.mjs [screenshot-dir]
-import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { launch } from './lib/harness.mjs';
+import { makeChecker, smoke, persistCheck, setField, closeSettings } from './lib/shared-a.mjs';
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 const ID = 'compose';
-const base = `http://localhost:${process.env.PORT || 5406}/${ID}/`;
+const base = `http://localhost:${process.env.PORT || 5220}/${ID}/`;
 const dir = process.argv[2];
 const TMP = dir || mkdtempSync(tmpdir() + '/cp-');
+const C = makeChecker();
 const browser = await launch();
+await smoke({ browser, url: base, check: C.check, startSel: '.ml-start', prep: async (p) => { await p.waitForSelector('.cp-cell'); } });
 const page = await browser.newPage({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale: 'fr-FR', hasTouch: true, acceptDownloads: true });
-const errors = [];
-page.on('pageerror', (e) => errors.push(String(e)));
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-let failed = 0;
-const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
+C.watch(page);
+const check = C.check;
 const state = () => page.evaluate(() => window.__test.state());
 const cell = (s, r) => page.locator(`.cp-cell[data-step="${s}"][data-row="${r}"]`);
 const start = async () => { await page.goto(base); await page.click('.ml-start'); await page.waitForSelector('.cp-cell'); };
@@ -76,6 +78,7 @@ check((await page.locator('.cp-chord').allTextContents()).length === 4, 'four ch
 await page.locator('.cp-chord').nth(1).click();
 st = await state();
 check(st.chords.join() === 'I,I,IV,V', 'chord block cycles vi -> I: ' + st.chords);
+for (const next of ['IV', 'V', 'vi', 'I']) { await page.locator('.cp-chord').nth(1).click(); check((await state()).chords[1] === next, 'chord block cycle ' + next); }
 await page.click('.cp-play');
 await page.waitForFunction(() => window.__test.state().played.length >= 16, null, { timeout: 15000 });
 st = await state();
@@ -117,19 +120,32 @@ check(st.cells.flat().length === melody.length && st.cells[15].join() === '0', '
 // A wrong file is refused and changes nothing.
 writeFileSync(TMP + '/bad.json', '{"hello":1}');
 await page.setInputFiles('.cp-file', TMP + '/bad.json');
-await page.waitForTimeout(300);
+await page.waitForFunction(() => /pas un air/.test(document.querySelector('.ml-toast')?.textContent || ''), null, { timeout: 5000 }).catch(() => {});
+check(/pas un air/.test(await page.textContent('.ml-toast')), 'bad file: no message');
 check((await state()).cells.flat().length === melody.length, 'bad file changed the tune');
 
 // Nothing is logged.
 const logged = await page.evaluate((id) => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const db = r.result; if (!db.objectStoreNames.contains('attempts')) return res(0); const q = db.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === id).length); }; }), ID);
 check(logged === 0, `${logged} attempts logged`);
 
+// Settings: a change in the dialog is applied at once (rows follow the scale), saved, and still applied after a reload.
+await page.evaluate((id) => localStorage.setItem('ml:settings:' + id, JSON.stringify({ scale: 'pentaMajor', tempo: 200, chords: false })), ID);
+await page.reload(); await page.click('.ml-start'); await page.waitForSelector('.cp-cell');
+check(await page.locator('.cp-chords').evaluate((e) => e.hidden), 'chord blocks hidden when the layer is off');
+await setField(page, 0, 'minor');
+check(JSON.stringify((await state()).rows) === JSON.stringify(ROWS.minor.map((x) => 60 + x)), 'scale change not applied at once');
+await closeSettings(page);
+await persistCheck({ page, url: base, slug: ID, fields: [[0, 'scale', 'blues'], [1, 'tempo', 120], [2, 'chords', true]], check, applied: async (p) => {
+  const x = await p.evaluate(() => window.__test.state());
+  const shown = await p.locator('.cp-chords').evaluate((e) => !e.hidden);
+  return x.scale === 'blues' && x.tempo === 120 && x.chordsOn && shown && JSON.stringify(x.rows) === JSON.stringify(ROWS.blues.map((v) => 60 + v)) ? '' : JSON.stringify([x.scale, x.tempo, x.chordsOn, shown]);
+} });
 // English, dark, overflow.
 await page.evaluate(() => { localStorage.setItem('ml:lang', 'en'); localStorage.setItem('ml:theme', 'dark'); });
 await page.reload(); await page.click('.ml-start'); await page.waitForSelector('.cp-cell');
 if (dir) await page.screenshot({ path: `${dir}/cp-en-dark.png` });
 check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), 'overflow');
-check(!errors.length, 'console: ' + errors.join(' | '));
+check(!C.errors.length, 'console: ' + C.errors.join(' | '));
 await browser.close();
-console.log(failed ? `${failed} failure(s)` : 'all good');
-process.exit(failed ? 1 : 0);
+console.log(C.failed ? `${C.failed} failure(s)` : 'all good');
+process.exit(C.failed ? 1 : 0);

@@ -1,6 +1,7 @@
 // Plays every level of Music words: a wrong answer, then right ones. Recomputes the sound parameters of each question.
 // Usage: PORT=5405 node tools/music-words.test.mjs [screenshot-dir]
 import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { smoke, skillOf, setField, closeSettings, persistCheck, readAttempts, newAttempts } from './lib/shared-b.mjs';
 const base = `http://localhost:${process.env.PORT || 5405}/music-words/`;
 const dir = process.argv[2];
 const browser = await launch();
@@ -10,7 +11,7 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'music-words').sort((x, y) => x.t - y.t)); }; }));
+const attempts = () => readAttempts(page, 'music-words');
 const LEVELS = {
   1: ['louder', 'softer', 'faster', 'slower'], 2: ['staccato', 'legato', 'cresc', 'dim'], 3: ['p', 'f', 'staccato', 'legato', 'cresc', 'dim'],
   4: ['pp', 'p', 'mp', 'mf', 'f', 'ff'], 5: ['largo', 'adagio', 'andante', 'moderato', 'allegro', 'presto', 'order'],
@@ -66,6 +67,7 @@ function verify(level, s) {
   if (level === 6 && ['da capo', 'coda', 'ritardando', 'accelerando'].includes(s.item)) check(s.mode === (s.plans.length ? 'hear' : 'see'), `${tag}: mode`);
 }
 
+await smoke({ browser, url: base, check });
 await page.goto(base);
 for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:music-words', JSON.stringify({ level: l })), level);
@@ -85,8 +87,15 @@ for (const level of levels(6)) {
     const right = s.item === 'order' ? s.order : [s.answer];
     if (round === 0) {
       if (dir) await page.screenshot({ path: `${dir}/mw-${level}.png` });
-      const wrong = s.ids.find((id) => !right.includes(id));
+      const wrong = s.ids.find((id) => id !== right[0]);
       await page.click(`.mw-choices button[data-id="${wrong}"]`);
+      check(await page.$('.mw-choices .ml-wrong'), `L${level}: wrong button not marked`);
+      check(await page.$('.ml-stage.ml-bad'), `L${level}: no wrong-answer feedback on the stage`);
+      if (s.item !== 'order' && level > 1) { // a second miss shows the answer, and is not logged again
+        const wrong2 = s.ids.find((id) => id !== right[0] && id !== wrong);
+        await page.click(`.mw-choices button[data-id="${wrong2}"]`);
+        check(await page.$(`.mw-choices button[data-id="${right[0]}"].ml-reveal`), `L${level}: answer not revealed after two misses`);
+      }
       await page.waitForTimeout(150);
     }
     for (const id of right) await page.click(`.mw-choices button[data-id="${id}"]`);
@@ -95,14 +104,42 @@ for (const level of levels(6)) {
       const d = await page.textContent('.mw-def');
       check(d.includes(s.item) && d.length > s.item.length + 8, `L6: no definition after answer (${d})`);
     }
-    await page.waitForTimeout(level === 6 ? 2600 : 1100);
-    const mine = (await attempts()).slice(before);
-    check(mine.length === 1 && mine[0].ok === (round !== 0) && mine[0].level === level && mine[0].item === s.item && mine[0].skill === (level <= 3 ? 'listen.expression' : 'read.expression'),
+    const mine = await newAttempts(page, 'music-words', before);
+    check(mine.length === 1 && mine[0].ok === (round !== 0) && mine[0].level === level && mine[0].item === s.item && mine[0].skill === skillOf('music-words', level),
       `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.skill]))}`);
+    await page.waitForFunction(() => !document.querySelector('.mw-choices .ml-right, .mw-choices .ml-reveal'), null, { timeout: 8000 });
   }
+  // Every item (and both modes) of the level, checked on freshly drawn questions: a settings change draws a new question.
+  for (const item of items) for (const mode of level === 4 ? ['sw', 'ws'] : level === 6 ? ['hear', 'see'] : [undefined]) {
+    for (let k = 0; k < rounds(item === 'order' ? 3 : 2, 1); k++) {
+      await page.evaluate(([i, m]) => window.__test.force(i, m), [item, mode]);
+      await page.evaluate(() => document.querySelector('.mw-choices button')?.setAttribute('data-old', '1')); // a new question redraws the buttons
+      await setField(page, 0, level);
+      await page.waitForFunction((it) => window.__test.state().item === it && !document.querySelector('.mw-choices button[data-old]'), item, { timeout: 5000 });
+      const t = await page.evaluate(() => window.__test.state());
+      verify(level, t);
+      if (level === 6 && ['accent', 'fermata', 'staccato', 'legato'].includes(item)) check(t.mode === mode, `L6 ${item}: mode ${t.mode} vs ${mode}`);
+      if (level === 4) check(t.mode === mode && t.ids.join() === 'pp,p,mp,mf,f,ff', `L4: mode/ids ${t.mode} ${t.ids}`);
+    }
+  }
+  await closeSettings(page);
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
   console.log(`L${level}`, [...seen].join(' '), [...modes].join(' '));
 }
+// Clean streak of 8 shows the next-level button; the level setting is saved, applied live and after a reload.
+await page.evaluate(() => localStorage.setItem('ml:settings:music-words', JSON.stringify({ level: 2 })));
+await page.reload();
+await page.click('.ml-start');
+for (let i = 0; i < 8; i++) {
+  await page.waitForFunction((n) => { const t = window.__test.state(); return t.answer && !document.querySelector('.mw-choices .ml-right') && true; }, i, { timeout: 8000 });
+  const t = await page.evaluate(() => window.__test.state());
+  await page.click(`.mw-choices button[data-id="${t.answer}"]`);
+  await page.waitForFunction(() => !document.querySelector('.mw-choices .ml-right'), null, { timeout: 8000 });
+}
+check(await page.$eval('.mw-next', (e) => e.classList.contains('mw-show')), 'next-level button after 8 clean answers');
+await page.click('.mw-next');
+await page.waitForFunction(() => window.__test.state().level === 3, null, { timeout: 5000 }).catch(() => check(false, 'next-level click did not go to level 3'));
+await persistCheck({ page, url: base, slug: 'music-words', fields: [[0, 'level', 5]], check, applied: async (pg) => ((await pg.evaluate(() => window.__test.state().level)) === 5 ? '' : 'level not applied') });
 check(!errors.length, 'console: ' + errors.join(' | '));
 await browser.close();
 console.log(failed ? `${failed} failure(s)` : 'all good');

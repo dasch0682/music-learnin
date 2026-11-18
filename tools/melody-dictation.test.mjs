@@ -1,6 +1,7 @@
 // Plays every level of Write the tune: a wrong tune (twice at round 1), then the right one. Recomputes the music rules.
 // Usage: npx vite --port 5302 --strictPort &   then   PORT=5302 node tools/melody-dictation.test.mjs [screenshot-dir]
 import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { smoke, skillOf, setField, closeSettings, persistCheck, recordAudio, playedNotes, waitPlayed, readAttempts } from './lib/shared-b.mjs';
 const base = `http://localhost:${process.env.PORT || 5302}/melody-dictation/`;
 const dir = process.argv[2];
 const browser = await launch();
@@ -10,7 +11,8 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 let failed = 0;
 const check = (ok, msg) => { if (!ok) { failed++; console.log('FAIL', msg); } };
-const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'melody-dictation').sort((x, y) => x.t - y.t)); }; }));
+const attempts = () => readAttempts(page, 'melody-dictation');
+const newAttemptsOf = async (before) => { const t0 = Date.now(); for (;;) { const a = (await attempts()).slice(before); if (a.length || Date.now() - t0 > 6000) return a; await new Promise((r) => setTimeout(r, 80)); } };
 const state = () => page.evaluate(() => window.__test.state());
 
 const pc = (m) => ((m % 12) + 12) % 12;
@@ -31,7 +33,13 @@ function rules(level, s) {
   check(ends.includes(pc(m[n - 1])), `${where}: must end on tonic or fifth`);
   check(m.every((x, i) => i === 0 || x !== m[i - 1]) || level >= 4, `${where}: repeated note`);
   const ivs = m.slice(1).map((x, i) => Math.abs(x - m[i]));
-  check(Math.max(...ivs) <= 7, `${where}: leap too big`);
+  // Leaps are counted in scale steps (at most 4 = a fifth); in a harmonic minor scale 4 steps can span 8 semitones (augmented fifth): reported, not failed.
+  if (level <= 5) {
+    const sc = level === 1 ? PENTA : isMinor(key) ? HARM : MAJ;
+    const deg = (x) => { const r = pc(x - TONIC[key]); return Math.floor((x - TONIC[key]) / 12) * sc.length + sc.indexOf(r); };
+    const ds = m.map(deg);
+    check(ds.every((d) => d >= -100) && ds.slice(1).every((d, i) => Math.abs(d - ds[i]) <= 4), `${where}: leap of more than 4 scale steps`);
+  } else check(Math.max(...ivs) <= 7, `${where}: leap too big`);
   // Spelling: letter + accidental must give the MIDI pitch class.
   s.spelling.forEach(([l, a], i) => check(pc(NAT[l] + a) === pc(m[i]), `${where}: spelling of note ${i}`));
   if (level === 1) {
@@ -55,15 +63,37 @@ function rules(level, s) {
     const [lo, hi] = s.clef === 'bass' ? [43, 60] : [60, 76];
     check(m.every((x) => x >= lo && x <= hi), `${where}: range for ${s.clef}`);
   }
+  {
+    const chrom = level === 6 ? new Set(m.map((x, i) => (scalePcs(key, MAJ).has(pc(x)) ? -1 : i)).filter((i) => i >= 0)) : new Set();
+    const bad = forbidden(m, s.spelling, (i) => chrom.has(i));
+    check(!bad.length, `${where}: augmented/diminished melodic interval ${bad}`);
+    if (level === 5) m.forEach((x, i) => { if (pc(x) === pc(TONIC[key] + 11)) check(m[i + 1] === x + 1, `${where}: raised seventh at ${i} does not resolve up to the tonic`); });
+  }
   if (level < 6) check(s.clef === 'treble', `${where}: clef`);
 }
 
+// Melodic intervals from the spelling (letter distance + semitones, not semitones alone): no augmented or diminished one.
+// Level labels do not mention the augmented second of harmonic minor, so it is forbidden too. The one exception:
+// the chromatic passing notes of level 6 (C to C#, an augmented unison, is how a chromatic step is written).
+const PLAIN = [[0], [1, 2], [3, 4], [5], [7], [8, 9], [10, 11]];
+const stepOf = (midi, [l, a]) => Math.floor((midi - a) / 12) * 7 + l;
+function forbidden(m, sp, skip = () => false) {
+  const out = [];
+  for (let i = 1; i < m.length; i++) {
+    if (skip(i - 1) || skip(i)) continue;
+    const steps = Math.abs(stepOf(m[i], sp[i]) - stepOf(m[i - 1], sp[i - 1]));
+    if (!PLAIN[steps % 7].includes(Math.abs(m[i] - m[i - 1]) - 12 * Math.floor(steps / 7))) out.push(`${m[i - 1]}->${m[i]} (${steps} letter steps)`);
+  }
+  return out;
+}
 const key = (midi) => `.md-kb [data-midi="${midi}"]`;
 async function enter(list) { for (const m of list) await page.click(key(m)); }
 async function settle() { await page.waitForFunction(() => window.__test.state().marks); }
 /** A white key of the range that is not `not`. */
 const other = (s, not) => { const w = []; for (let m = s.range[0]; m <= s.range[1]; m++) if ([0, 2, 4, 5, 7, 9, 11].includes(pc(m)) && m !== not) w.push(m); return w[(not * 7) % w.length]; };
 
+await smoke({ browser, url: base, check });
+await recordAudio(page);
 await page.goto(base);
 for (const level of levels(6)) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:melody-dictation', JSON.stringify({ level: l, tempo: 120 })), level);
@@ -93,6 +123,7 @@ for (const level of levels(6)) {
       check(st.marks.length === m.length - 1 && st.marks.every((ok, i) => ok === (i + 1 !== at)), `L${level}: marks ${JSON.stringify(st.marks)}`);
       const colours = await page.$$eval('.ml-note', (e) => e.map((g) => g.style.color));
       check(colours.slice(1).every((c, i) => c === (st.marks[i] ? 'var(--good)' : 'var(--bad)')), `L${level}: colours ${JSON.stringify(colours)}`);
+      await page.waitForFunction(() => document.querySelector('.ml-stage.ml-bad'), null, { timeout: 4000 }).catch(() => check(false, `L${level}: no wrong-answer feedback on the stage`));
       if (dir && round === 0 && level === 4) await page.screenshot({ path: `${dir}/md-4-wrong.png` });
       if (round === 1) { // a second mistake is not logged again
         await enter([bad, ...m.slice(2)]);
@@ -105,18 +136,44 @@ for (const level of levels(6)) {
     } else {
       await enter(m.slice(1));
     }
-    await settle();
-    const done = await state();
+    // read the state in the same evaluate that sees the marks: a right answer moves on by itself a few hundred ms later (260 ms in fast mode)
+    const done = await (await page.waitForFunction(() => { const t = window.__test.state(); return t.marks && t; })).jsonValue();
     check(done.marks.every(Boolean) && done.entered.join() === m.slice(1).join(), `L${level} round ${round}: final ${JSON.stringify(done.entered)} vs ${m}`);
     if (dir && round === 2 && level === 6) await page.screenshot({ path: `${dir}/md-6-${s.clef}.png` });
-    await page.waitForTimeout(1500);
-    const mine = (await attempts()).slice(before);
-    check(mine.length === 1 && mine[0].ok === (round > 1) && mine[0].level === level && mine[0].item === String(s.n) && mine[0].skill === 'listen.dictation', `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.level, a.skill]))}`);
+    const mine = await newAttemptsOf(before);
+    await page.waitForFunction(() => { const t = window.__test.state(); return t.marks === null && t.locked === false; }, null, { timeout: 8000 });
+    check(mine.length === 1 && mine[0].ok === (round > 1) && mine[0].level === level && mine[0].item === String(s.n) && mine[0].skill === skillOf('melody-dictation', level), `L${level} round ${round}: ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.level, a.skill]))}`);
   }
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `L${level}: overflow`);
+  // Many more generated tunes without playing them: changing a setting draws a new question.
+  for (let i = 0; i < rounds(60, 12); i++) {
+    await setField(page, 1, 60 + (i % 2) * 5);
+    await page.waitForFunction((k) => window.__test.state().melody && window.__test.state().locked === false, null, { timeout: 5000 }).catch(() => {});
+    const t = await state();
+    rules(level, t);
+    seen.add(t.key); clefs.add(t.clef); lens.add(t.n);
+  }
+  await closeSettings(page);
+  if (level === 6) check(clefs.has('treble') && clefs.has('bass'), 'L6: both clefs should appear (sampled)');
+  if (level === 5 && !FAST) check(lens.has(6) && lens.has(7), 'L5: lengths 6 and 7 both appear');
+  if (level === 4 && !FAST) check(seen.size >= 3, `L4: keys ${[...seen]}`);
   if (level === 6) check(clefs.has('treble') && clefs.has('bass'), 'L6: both clefs should appear');
   if (level === 5) check(lens.size >= 1, 'L5 lengths');
   console.log(`L${level}`, [...seen].join(' '), [...clefs].join('/'), [...lens].join(','));
+}
+// Playback = the melody, spaced by the tempo setting; the setting is saved and still applied after a reload.
+await page.evaluate(() => localStorage.setItem('ml:settings:melody-dictation', JSON.stringify({ level: 3, tempo: 120 })));
+await page.reload();
+await page.click('.ml-start');
+{
+  let p = await waitPlayed(page, 5);
+  let st = await state();
+  check(p.length >= st.n && p.slice(0, st.n).every((x, i) => x.midi === st.melody[i]), `playback ${JSON.stringify(p.map((x) => x.midi))} vs ${st.melody}`);
+  check(Math.abs(p[1].when - p[0].when - 0.5) < 0.02, `tempo 120: spacing ${p[1].when - p[0].when}`);
+  await persistCheck({ page, url: base, slug: 'melody-dictation', fields: [[1, 'tempo', 60]], check });
+  p = await waitPlayed(page, 5);
+  check(p.length >= 2 && Math.abs(p[1].when - p[0].when - 1) < 0.02, `tempo 60 after reload: spacing ${p.length > 1 && p[1].when - p[0].when}`);
+  await persistCheck({ page, url: base, slug: 'melody-dictation', fields: [[0, 'level', 5]], check, applied: async (pg) => ((await pg.evaluate(() => window.__test.state().level)) === 5 ? '' : 'level not applied') });
 }
 // Undo, then next-level button after a clean streak.
 await page.evaluate(() => localStorage.setItem('ml:settings:melody-dictation', JSON.stringify({ level: 2, tempo: 120 })));
@@ -131,9 +188,12 @@ check((await state()).entered.length === 0 && (await page.$$eval('.ml-note', (e)
 for (let i = 0; i < 6; i++) {
   s = await state();
   await enter(s.melody.slice(1));
-  await page.waitForTimeout(1900);
+  // The next tune can be the same as this one (small pool): wait for the marks of this answer, then for the reset, not for a different melody.
+  await settle();
+  await page.waitForFunction(() => { const t = window.__test.state(); return t.marks === null && t.entered.length === 0 && !t.locked; }, null, { timeout: 8000 });
 }
 check(await page.$eval('.md-next', (e) => e.classList.contains('md-show')), 'next-level button after a clean streak');
+await page.waitForSelector('.md-next.md-show');
 await page.click('.md-next');
 await page.waitForTimeout(400);
 check((await state()).level === 3, 'next level click');

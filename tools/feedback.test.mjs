@@ -62,6 +62,18 @@ const errors = [];
 const sessions = [];
 async function session({ locale = 'fr-FR', reducedMotion = 'no-preference' } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 780 }, colorScheme: 'light', locale, reducedMotion });
+  // Spy: every oscillator created, flagged when it comes from sfx() (the feedback cues).
+  await ctx.addInitScript(() => {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const make = AC.prototype.createOscillator;
+    window.__osc = [];
+    AC.prototype.createOscillator = function () {
+      const o = make.apply(this, arguments);
+      window.__osc.push({ t: performance.now(), inSfx: /\bsfx\b/.test(new Error().stack || ''), o });
+      return o;
+    };
+  });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -147,6 +159,7 @@ const nextQ = async (p, ms = 1000) => { await sleep(ms); await p.waitForFunction
   check(await core(p, 'feedback', `return m.getFeedback().mode;`) === 'normal', 'unknown mode → normal');
 }
 
+const sec3 = async () => {
 // ---- 3. silent and discreet
 for (const mode of combos(['silent', 'discreet'])) {
   const p = await session();
@@ -163,7 +176,9 @@ for (const mode of combos(['silent', 'discreet'])) {
   check(l.length === 2 && l.every((r) => r.sound === null && r.mode === mode && r.message === null), `${mode}: log ${JSON.stringify(l)}`);
   check(l[0].visual === (mode === 'silent' ? 'tint' : 'none'), `${mode}: visual ${l[0].visual}`);
 }
+};
 
+const sec4 = async () => {
 // ---- 4, 9, 11. encouraging (English then French): messages, no shake, reveal, streak, accessibility
 for (const locale of combos(['en-US', 'fr-FR'])) { // fast: English only (the message banks of both languages are checked above)
   const lang = locale.slice(0, 2);
@@ -210,7 +225,9 @@ for (const locale of combos(['en-US', 'fr-FR'])) { // fast: English only (the me
   await sleep(900);
   check((await p.locator('.ml-stars').count()) === 0, `${lang}: stars removed`);
 }
+};
 
+const sec56 = async () => {
 // ---- 5 and 6. chatter limit, no speed praise
 {
   const p = await session({ locale: 'en-US' });
@@ -235,7 +252,9 @@ for (const locale of combos(['en-US', 'fr-FR'])) { // fast: English only (the me
   check(kinds.fast === kinds.slow, `speed changes feedback: ${kinds.fast} vs ${kinds.slow}`);
   check(kinds.fastMs < 1500 && kinds.slowMs > 2000, `speed test not meaningful ${kinds.fastMs} ${kinds.slowMs}`);
 }
+};
 
+const sec7 = async () => {
 // ---- 7. silent: true on the call (find-a-note with "Play the note" on)
 for (const mode of combos(FEEDBACK_MODES)) {
   const p = await session();
@@ -252,9 +271,64 @@ for (const mode of combos(FEEDBACK_MODES)) {
   const l = await fbLog(p);
   check(l.length >= 1 && l.every((r) => r.sound === null), `find-a-note ${mode}: sounds ${JSON.stringify(l.map((r) => r.sound))}`);
 }
+};
 
-// ---- 8. Microphone game: the microphone stays shut while a shell sound plays; no vibration
-for (const mode of combos(['encouraging', 'normal'])) {
+// ---- 8. The four modes in three kinds of game (choice: ear-cadences, microphone: second-voice, rhythm: tap-rhythm).
+// For each mode and game: the mode is applied (data-fb, records), the cue sounds are the ones of the spec, a wrong answer never
+// uses another sound than the soft glides of audio.js (no buzzer: only sine glides from sfx(), none of the old square/sawtooth tones),
+// and in the choice game the answer is revealed after the second miss only.
+const SFX_NAMES = ['good', 'bad', 'good-warm', 'bad-soft', 'cheer'];
+const EXPECT = {
+  silent: { good: null, bad: null, vgood: 'tint', vbad: 'tint' },
+  discreet: { good: null, bad: null, vgood: 'none', vbad: 'none' },
+  normal: { good: 'good', bad: 'bad', vgood: 'tint', vbad: 'tint+shake' },
+  encouraging: { good: 'good-warm', bad: 'bad-soft', vgood: 'tint', vbad: 'tint' },
+};
+/** Checks the cues of one game page for one mode. exact = every cue has the sound of the mode (false: a game may mute some cues itself). */
+async function audit(game, p, mode, { exact = true } = {}) {
+  const tag = `${game} ${mode}`;
+  const l = await fbLog(p);
+  const osc = await p.evaluate(() => (window.__osc || []).map((x) => ({ t: x.t, inSfx: x.inSfx, type: x.o.type })));
+  const bad = l.filter((r) => r.kind === 'bad'), good = l.filter((r) => r.kind === 'good');
+  const E = EXPECT[mode];
+  check(bad.length >= 1 && good.length >= 1, `${tag}: expected a wrong and a right cue, got ${l.map((r) => r.kind)}`);
+  check((await p.evaluate(() => document.documentElement.dataset.fb)) === mode, `${tag}: data-fb`);
+  check(l.every((r) => r.mode === mode), `${tag}: records of another mode ${JSON.stringify(l.map((r) => r.mode))}`);
+  for (const r of bad) {
+    check(r.sound === E.bad || (!exact && r.sound === null), `${tag}: wrong-answer sound "${r.sound}", expected "${E.bad}"`);
+    check(r.visual === E.vbad, `${tag}: wrong-answer visual ${r.visual}, expected ${E.vbad}`);
+    check(r.sound === null || r.ms <= 250, `${tag}: error sound lasts ${r.ms} ms`);
+  }
+  for (const r of good) {
+    check(r.sound === E.good || (!exact && r.sound === null), `${tag}: right-answer sound "${r.sound}", expected "${E.good}"`);
+    check(r.visual === E.vgood, `${tag}: right-answer visual ${r.visual}, expected ${E.vgood}`);
+  }
+  check(l.every((r) => r.sound === null || SFX_NAMES.includes(r.sound)), `${tag}: unknown sound ${JSON.stringify(l.map((r) => r.sound))}`);
+  if (E.bad && exact) check(bad.some((r) => r.sound), `${tag}: no error sound at all`);
+  // the oscillators sfx() created at the time of each wrong answer: sine glides only
+  const err = osc.filter((o) => o.inSfx && bad.some((r) => r.sound && o.t >= r.t - 3 && o.t <= r.t + 30));
+  if (bad.some((r) => r.sound)) check(err.length >= 1, `${tag}: no oscillator seen for the error sound (spy broken?)`);
+  check(err.every((o) => o.type === 'sine'), `${tag}: error sound uses ${[...new Set(err.map((o) => o.type))]}`);
+  check(!osc.some((o) => o.inSfx && ['square', 'sawtooth'].includes(o.type)), `${tag}: harsh waveform in a cue`);
+}
+
+async function choiceMode(mode) {
+  const p = await session({ locale: 'en-US' });
+  await openCad(p, { mode });
+  const s = await state(p);
+  await wrong(p);
+  await sleep(250);
+  check((await p.locator('.cd-choices .ml-reveal').count()) === 0, `ear-cadences ${mode}: answer revealed after the first miss`);
+  await wrong(p);
+  await sleep(250);
+  const rev = await p.evaluate(() => [...document.querySelectorAll('.cd-choices .ml-reveal')].map((b) => b.dataset.type));
+  check(rev.length === 1 && rev[0] === s.type, `ear-cadences ${mode}: reveal after the second miss ${JSON.stringify(rev)}, expected ${s.type}`);
+  await right(p);
+  await sleep(250);
+  await audit('ear-cadences', p, mode);
+}
+
+async function micMode(mode) {
   const p = await session();
   await p.goto(base + 'second-voice/');
   await p.evaluate(([m]) => {
@@ -264,7 +338,7 @@ for (const mode of combos(['encouraging', 'normal'])) {
   await p.reload();
   await p.click('.ml-start');
   const feed = async (midi, ms) => { for (let t = 0; t < ms; t += 40) { await p.evaluate((m) => window.__test.feed(m), midi); await sleep(40); } };
-  const listening = async () => { for (let i = 0; i < 200; i++) { const s = await state(p); if (s.listening && !s.done) return s; await feed(null, 80); } throw new Error('never listening'); };
+  const listening = async () => { for (let i = 0; i < 300; i++) { const s = await state(p); if (s.listening && !s.done) return s; await feed(null, 80); } throw new Error('never listening'); };
   await p.evaluate(() => window.__test.feed(null));
   let s = await listening();
   await p.evaluate(() => {
@@ -279,7 +353,6 @@ for (const mode of combos(['encouraging', 'normal'])) {
   s = await listening();
   await feed(bad, 2600); // second miss (flash only)
   s = await listening();
-  const target = s.steps[0].targets[s.steps[0].targets.length - 1];
   for (let i = 0; i < s.steps.length; i++) { const cur = await listening(); await feed(cur.steps[i].targets.at(-1) + 0.2, 900); await feed(null, 500); }
   await feed(null, 1000);
   const [l, samples] = await Promise.all([fbLog(p), p.evaluate(() => window.__samples)]);
@@ -293,9 +366,69 @@ for (const mode of combos(['encouraging', 'normal'])) {
       check(during.every(([, on]) => !on), `second-voice ${mode}: listening during ${r.sound}`);
     }
   }
-  check(l.some((r) => r.sound), `second-voice ${mode}: no sound at all`);
+  if (E_LOUD(mode)) check(l.some((r) => r.sound), `second-voice ${mode}: no sound at all`);
+  await audit('second-voice', p, mode, { exact: false });
+}
+const E_LOUD = (mode) => mode === 'normal' || mode === 'encouraging';
+
+async function rhythmMode(mode) {
+  const p = await session();
+  await p.goto(base + 'tap-rhythm/');
+  await p.evaluate((m) => {
+    localStorage.setItem('ml:settings:_feedback', JSON.stringify({ mode: m, haptics: false }));
+    localStorage.setItem('ml:settings:tap-rhythm', JSON.stringify({ level: 1, tempo: 140, tolerance: 'easy', latency: 0 }));
+  }, mode);
+  await p.reload();
+  await p.click('.ml-start');
+  await p.waitForFunction(() => window.__test && window.__test.item);
+  await p.evaluate(() => { window.__fb = []; });
+  const tapPad = () => p.evaluate(() => document.querySelector('.tr-pad').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })));
+  const run = async (skipLast) => {
+    const n0 = (await p.evaluate(() => window.__test.result?.run)) ?? 0;
+    if ((await p.evaluate(() => window.__test.phase)) === 'idle') await tapPad();
+    await p.waitForFunction(() => window.__test.turnStart != null && window.__test.phase !== 'feedback', null, { timeout: 15000 });
+    await p.evaluate(async (skip) => {
+      const pad = document.querySelector('.tr-pad');
+      for (const e of window.__test.expected.slice(0, skip ? -1 : undefined)) {
+        while (performance.now() < window.__test.turnStart + e) await new Promise((r) => setTimeout(r, 2));
+        pad.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+      }
+    }, skipLast);
+    await p.waitForFunction((n) => { const t = window.__test; return t.result && t.result.run > n && t.phase === 'feedback'; }, n0, { timeout: 15000 });
+    return p.evaluate(() => window.__test.result);
+  };
+  const r1 = await run(true);
+  check(!r1.correct, `tap-rhythm ${mode}: last note missing was judged right`);
+  // The pad is locked for 700 ms after a result. Taps come from a timer loop of the page: on a busy machine one of them can slip out of
+  // the tolerance, so a right run may be tried a few times (each failed try is one more wrong cue, which the audit accepts).
+  let r2 = null;
+  for (let t = 0; t < 4 && !(r2 && r2.correct); t++) { await sleep(900); r2 = await run(false); }
+  check(r2.correct, `tap-rhythm ${mode}: right run judged wrong ${JSON.stringify(r2)}`);
+  await sleep(200);
+  await audit('tap-rhythm', p, mode);
 }
 
+// Static: no buzzer left in the code (no square/sawtooth cue, no 'buzz' / 'wrong' timbre, apps never play cues themselves).
+{
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const audioSrc = readFileSync(ROOT + '/packages/core/audio.js', 'utf8');
+  const sfxBlock = audioSrc.slice(audioSrc.indexOf('const SFX = {'), audioSrc.indexOf('export const SFX_MS'));
+  check(!/square|sawtooth/.test(sfxBlock), 'SFX table uses square/sawtooth');
+  check(!/buzz|wrong|error/i.test(audioSrc.slice(audioSrc.indexOf('const TIMBRES'), audioSrc.indexOf('/** Play one note'))), 'a buzzer-like timbre exists');
+  for (const d of readdirSync(ROOT + '/apps', { withFileTypes: true })) {
+    if (!d.isDirectory()) continue;
+    let src = '';
+    try { src = readFileSync(`${ROOT}/apps/${d.name}/main.js`, 'utf8'); } catch { continue; }
+    check(!/\bsfx\(|buzz|createOscillator/.test(src), `apps/${d.name}/main.js plays its own cue (sfx/buzz/oscillator)`);
+  }
+}
+
+// Fast mode: the independent sections (each has its own page) run at the same time (they mostly wait on real timers), and section 8 plays
+// two modes only (the encouraging one and the discreet one; the default is checked in section 1, silent in 3). Full mode: one after the other, all four modes.
+const run8 = (mode) => Promise.all([choiceMode(mode), micMode(mode), rhythmMode(mode)].map((x) => x.catch((e) => { check(false, `${mode}: ${e.message.split('\n')[0]}`); })));
+const guard = (f) => f().catch((e) => check(false, `${f.name}: ${String(e.message).split('\n')[0]}`));
+const sec8 = async () => { if (FAST) await Promise.all(['discreet', 'encouraging'].map(run8)); else for (const mode of FEEDBACK_MODES) await run8(mode); };
+const sec10 = async () => {
 // ---- 10. Reduced motion
 {
   const p = await session({ locale: 'en-US', reducedMotion: 'reduce' });
@@ -315,7 +448,10 @@ for (const mode of combos(['encouraging', 'normal'])) {
   check((await p.locator('.ml-stars span').count()) === 5, 'reduced motion: stars still shown');
   check(await p.evaluate(() => getComputedStyle(document.querySelector('.ml-stage')).transform) === 'none', 'reduced motion: stage not moved');
 }
+};
 
+if (FAST) await Promise.all([sec3, sec4, sec56, sec7, sec8, sec10].map((f) => guard(f)));
+else for (const f of [sec3, sec4, sec56, sec7, sec8, sec10]) await f();
 check(!errors.length, 'console: ' + errors.join(' | '));
 for (const c of sessions) await c.close();
 await browser.close();

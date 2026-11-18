@@ -1,7 +1,7 @@
 // Plays every level of Read the chord: one wrong answer, then the right one.
 // The expected answer is recomputed here from the notes shown (letters and semitones), not taken from the game.
 // Usage: npx vite --port 5306 --strictPort &   then   PORT=5306 node tools/read-chords.test.mjs [screenshot-dir]
-import { launch, FAST, rounds, levels, combos } from './lib/harness.mjs';
+import { launch, FAST, rounds, levels, combos, readAttempts, scaled, sleep } from './lib/harness.mjs';
 const base = `http://localhost:${process.env.PORT || 5306}/read-chords/`;
 const dir = process.argv[2];
 const browser = await launch();
@@ -37,12 +37,14 @@ for (const [scheme, locale] of combos([['light', 'fr-FR'], ['dark', 'en-US']])) 
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  const attempts = () => page.evaluate(() => new Promise((res) => { const r = indexedDB.open('music-learnin'); r.onsuccess = () => { const q = r.result.transaction('attempts').objectStore('attempts').getAll(); q.onsuccess = () => res(q.result.filter((a) => a.game === 'read-chords').sort((x, y) => x.t - y.t)); }; }));
+  const attempts = () => readAttempts(page, 'read-chords');
+  // The answer is written asynchronously: wait for the new row(s) instead of a fixed delay.
+  const newRows = async (n) => { const end = Date.now() + scaled(10000); while (Date.now() < end) { if ((await attempts()).length > n) { await sleep(150); return (await attempts()).slice(n); } await sleep(50); } return []; };
   await page.goto(base);
   for (const level of levels(6)) {
     await page.evaluate((l) => localStorage.setItem('ml:settings:read-chords', JSON.stringify({ level: l, sound: true })), level);
     await page.reload();
-    await page.waitForFunction(() => window.__test?.state());
+    await page.waitForFunction(() => window.__test?.state(), null, { timeout: scaled(15000) });
     const seen = new Set();
     for (let round = 0; round < rounds(ROUNDS[level], 2); round++) {
       for (const [phaseNo, ask] of ASKS[level].entries()) {
@@ -96,14 +98,14 @@ for (const [scheme, locale] of combos([['light', 'fr-FR'], ['dark', 'en-US']])) 
         if (wrongFirst) {
           if (dir && round === 0 && phaseNo === 0) await page.screenshot({ path: `${dir}/rc-${level}-${scheme}.png` });
           await page.click(`.rc-choices button:not([data-id="${want}"])`);
-          await page.waitForTimeout(150);
+          await page.waitForFunction(() => document.querySelectorAll('.rc-choices .ml-wrong:disabled').length >= 1, null, { timeout: scaled(5000) }).catch(() => {});
           check(await page.evaluate(() => document.querySelectorAll('.rc-choices .ml-wrong:disabled').length === 1), `${tag}: wrong button not marked`);
         }
+        await page.evaluate(() => { window.__prevBtn = document.querySelector('.rc-choices button'); });
         await page.click(`.rc-choices button[data-id="${want}"]`);
-        const was = JSON.stringify([s.ask, s.notes]);
-        await page.waitForFunction((w) => { const t = window.__test.state(); return JSON.stringify([t.ask, t.notes]) !== w; }, was, { timeout: 5000 });
-        await page.waitForTimeout(100);
-        const mine = (await attempts()).slice(before);
+        // The next question re-renders the buttons. (Comparing the notes is not enough: the same chord can come twice in a row.)
+        await page.waitForFunction(() => !document.contains(window.__prevBtn), null, { timeout: scaled(8000) });
+        const mine = await newRows(before);
         const item = ask === 'root' ? 'root' : ask === 'full' ? 'full' : ask === 'inv' ? want : want;
         check(mine.length === 1 && mine[0].ok === !wrongFirst && mine[0].level === level && mine[0].item === item && mine[0].skill === 'read.chords', `${tag}: attempts ${JSON.stringify(mine.map((a) => [a.ok, a.item, a.skill]))}`);
       }
@@ -117,14 +119,16 @@ for (const [scheme, locale] of combos([['light', 'fr-FR'], ['dark', 'en-US']])) 
   // The next level button moves one level up.
   await page.evaluate(() => localStorage.setItem('ml:settings:read-chords', JSON.stringify({ level: 2, sound: false })));
   await page.reload();
-  await page.waitForFunction(() => window.__test?.state());
+  await page.waitForFunction(() => window.__test?.state(), null, { timeout: scaled(15000) });
   for (let i = 0; i < 8; i++) {
     const s = await page.evaluate(() => window.__test.state());
+    await page.evaluate(() => { window.__prevBtn = document.querySelector('.rc-choices button'); });
     await page.click(`.rc-choices button[data-id="${s.answer}"]`);
-    await page.waitForTimeout(750);
+    // next question = buttons re-rendered (a fixed sleep was shorter than the game's own delay under load: the click then hit a locked question)
+    await page.waitForFunction(() => !document.contains(window.__prevBtn), null, { timeout: scaled(8000) });
   }
   await page.click('.rc-next.rc-show');
-  await page.waitForTimeout(300);
+  await page.waitForFunction(() => window.__test.state().level === 3, null, { timeout: scaled(8000) }).catch(() => {});
   check((await page.evaluate(() => window.__test.state().level)) === 3, `${scheme}: next level button does not work`);
   await ctx.close();
 }

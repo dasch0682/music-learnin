@@ -203,7 +203,9 @@ async function answer(ok, button) {
   if (!ok) {
     button.classList.add('ml-wrong');
     button.disabled = true;
-    return judge(false);
+    const res = judge(false);
+    if (wrongs >= 2) answerBox.querySelector(`[data-sig="${sigStr(q.n)}"]`)?.classList.add('ml-reveal'); // 2nd miss: show the answer
+    return res;
   }
   button.classList.add('ml-right');
   const sound = !!game.settings.sound;

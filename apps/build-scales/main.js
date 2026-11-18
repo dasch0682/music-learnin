@@ -105,7 +105,7 @@ function makeQuestion(item, level) {
 let q = null, kb = null, kbKey = '';
 let latched = new Set();
 const forced = []; // test hook: items to ask next
-let locked = true, missed = false, streak = 0, last = null, seq = 0, started = 0, timer = 0, count = 0, shownLevel = 0;
+let locked = true, missed = false, revealed = false, streak = 0, last = null, seq = 0, started = 0, timer = 0, count = 0, shownLevel = 0;
 
 const PLAY = '<svg viewBox="0 0 64 64" width="32" height="32" fill="currentColor" aria-hidden="true"><path d="M22 12v40l32-20z"/></svg>';
 const replay = h('button', { className: 'ml-round bs-replay', innerHTML: PLAY });
@@ -142,6 +142,7 @@ function paint() {
     el.classList.toggle('bs-on', q.mode === 'build' && latched.has(pc));
     el.classList.toggle('bs-lit', q.mode === 'pick' && q.lit.has(pc));
     el.classList.toggle('bs-home', q.home === pc);
+    el.classList.toggle('ml-reveal', revealed && q.mode === 'pick' && q.answer === pc);
   }
 }
 
@@ -173,6 +174,7 @@ async function next() {
   q = makeQuestion(item, level);
   latched = new Set(q.start);
   missed = false;
+  revealed = false;
   locked = false;
   count++;
   render();
@@ -214,8 +216,10 @@ async function failure(badPcs) {
     k.classList.add('bs-bad');
     setTimeout(() => k.classList.remove('bs-bad'), 700);
   }
-  if (missed) game.flash(false);
-  else { missed = true; await game.attempt(record(false)); }
+  if (missed) {
+    if (q.mode === 'pick') { revealed = true; paint(); } // 2nd miss: show the right key
+    game.flash(false);
+  } else { missed = true; await game.attempt(record(false)); }
   const my = seq;
   timer = setTimeout(() => {
     if (my !== seq) return;

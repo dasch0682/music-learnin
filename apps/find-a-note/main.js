@@ -98,15 +98,14 @@ async function answer(option, button) {
   const ms = Math.round(performance.now() - started);
   if (game.settings.sound) playNote(current.midi, { dur: 0.5 });
   button.classList.add(option.ok ? 'ml-right' : 'ml-wrong');
-  await game.attempt({ skill: current.skill, correct: option.ok, ms, level: +game.settings.level, item: itemOf(current), silent: game.settings.sound });
-  if (!option.ok) { // try again
+  // State changes first, the (async) log after: a second tap during the IndexedDB write must not log twice or slip past the lock.
+  if (option.ok) { locked = true; streak++; } else {
     streak = 0;
     button.disabled = true;
     if (++misses === 2) choices.querySelector('[data-ok]')?.classList.add('ml-reveal'); // 2nd miss: show the answer
-    return;
-  } // same note on the same note
-  locked = true;
-  streak++;
+  }
+  await game.attempt({ skill: current.skill, correct: option.ok, ms, level: +game.settings.level, item: itemOf(current), silent: game.settings.sound });
+  if (!option.ok) return; // try again
   if (streak === 20) game.celebrate(game.t('levelUp'));
   setTimeout(next, 450);
 }

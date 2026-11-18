@@ -76,6 +76,15 @@ const LEVELS = {
   6: { n: [8], keys: ['C', 'G', 'F'], range: null, moves: [[1, 4], [2, 2], [3, 1]], leaps: 1, chromatic: true },
 };
 
+// A melodic interval is plain (major, minor or perfect) when the semitones match the letter distance:
+// 2 letter steps = 3 or 4 semitones, 3 steps = 5, 4 steps = 7, and so on. Anything else is augmented or diminished.
+const PLAIN = [[0], [1, 2], [3, 4], [5], [7], [8, 9], [10, 11]];
+const stepOf = (n) => Math.floor((n.midi - n.acc) / 12) * 7 + n.letter;
+function plainInterval(a, b) {
+  const steps = Math.abs(stepOf(a) - stepOf(b));
+  return PLAIN[steps % 7].includes(Math.abs(a.midi - b.midi) - 12 * Math.floor(steps / 7));
+}
+
 const wsum = (arr) => arr.reduce((a, [, w]) => a + w, 0);
 function weighted(arr) {
   let r = Math.random() * wsum(arr);
@@ -115,10 +124,11 @@ function tryMelody(cfg, key, clef, range, n) {
   if (cfg.raised) { // the raised seventh must lead to the tonic, and appear at least once
     const lead = midis.map((m, i) => (mod(m, 12) === leadPc ? i : -1)).filter((i) => i >= 0);
     if (!lead.length) return null;
-    if (!lead.every((i) => [midis[i - 1], midis[i + 1]].some((m) => m != null && mod(m - key.tonic, 12) === 0))) return null;
-    if (midis.some((m, i) => i && Math.abs(m - midis[i - 1]) === 3 && Math.abs(idx[i] - idx[i - 1]) === 1)) return null; // no augmented second
+    if (!lead.every((i) => midis[i + 1] === midis[i] + 1)) return null; // the raised seventh resolves up to the tonic
   }
   const notes = midis.map((m) => ({ midi: m, ...spelling.get(mod(m, 12)) }));
+  // No augmented or diminished melodic interval (the augmented second of harmonic minor included: no level trains it).
+  if (notes.some((nt, i) => i && !plainInterval(notes[i - 1], nt))) return null;
   if (extra) {
     const gaps = [];
     for (let i = 1; i < len; i++) if (Math.abs(idx[i] - idx[i - 1]) === 1 && Math.abs(midis[i] - midis[i - 1]) === 2) gaps.push(i);
