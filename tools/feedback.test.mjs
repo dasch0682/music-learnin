@@ -159,6 +159,7 @@ const nextQ = async (p, ms = 1000) => { await sleep(ms); await p.waitForFunction
   check(await core(p, 'feedback', `return m.getFeedback().mode;`) === 'normal', 'unknown mode → normal');
 }
 
+const sec3 = async () => {
 // ---- 3. silent and discreet
 for (const mode of combos(['silent', 'discreet'])) {
   const p = await session();
@@ -175,7 +176,9 @@ for (const mode of combos(['silent', 'discreet'])) {
   check(l.length === 2 && l.every((r) => r.sound === null && r.mode === mode && r.message === null), `${mode}: log ${JSON.stringify(l)}`);
   check(l[0].visual === (mode === 'silent' ? 'tint' : 'none'), `${mode}: visual ${l[0].visual}`);
 }
+};
 
+const sec4 = async () => {
 // ---- 4, 9, 11. encouraging (English then French): messages, no shake, reveal, streak, accessibility
 for (const locale of combos(['en-US', 'fr-FR'])) { // fast: English only (the message banks of both languages are checked above)
   const lang = locale.slice(0, 2);
@@ -222,7 +225,9 @@ for (const locale of combos(['en-US', 'fr-FR'])) { // fast: English only (the me
   await sleep(900);
   check((await p.locator('.ml-stars').count()) === 0, `${lang}: stars removed`);
 }
+};
 
+const sec56 = async () => {
 // ---- 5 and 6. chatter limit, no speed praise
 {
   const p = await session({ locale: 'en-US' });
@@ -247,7 +252,9 @@ for (const locale of combos(['en-US', 'fr-FR'])) { // fast: English only (the me
   check(kinds.fast === kinds.slow, `speed changes feedback: ${kinds.fast} vs ${kinds.slow}`);
   check(kinds.fastMs < 1500 && kinds.slowMs > 2000, `speed test not meaningful ${kinds.fastMs} ${kinds.slowMs}`);
 }
+};
 
+const sec7 = async () => {
 // ---- 7. silent: true on the call (find-a-note with "Play the note" on)
 for (const mode of combos(FEEDBACK_MODES)) {
   const p = await session();
@@ -264,6 +271,7 @@ for (const mode of combos(FEEDBACK_MODES)) {
   const l = await fbLog(p);
   check(l.length >= 1 && l.every((r) => r.sound === null), `find-a-note ${mode}: sounds ${JSON.stringify(l.map((r) => r.sound))}`);
 }
+};
 
 // ---- 8. The four modes in three kinds of game (choice: ear-cadences, microphone: second-voice, rhythm: tap-rhythm).
 // For each mode and game: the mode is applied (data-fb, records), the cue sounds are the ones of the spec, a wrong answer never
@@ -400,9 +408,6 @@ async function rhythmMode(mode) {
   await audit('tap-rhythm', p, mode);
 }
 
-for (const mode of FEEDBACK_MODES) {
-  await Promise.all([choiceMode(mode), micMode(mode), rhythmMode(mode)].map((x) => x.catch((e) => { check(false, `${mode}: ${e.message.split('\n')[0]}`); })));
-}
 // Static: no buzzer left in the code (no square/sawtooth cue, no 'buzz' / 'wrong' timbre, apps never play cues themselves).
 {
   const { readFileSync, readdirSync } = await import('node:fs');
@@ -418,6 +423,12 @@ for (const mode of FEEDBACK_MODES) {
   }
 }
 
+// Fast mode: the independent sections (each has its own page) run at the same time (they mostly wait on real timers), and section 8 plays
+// two modes only (the encouraging one and the discreet one; the default is checked in section 1, silent in 3). Full mode: one after the other, all four modes.
+const run8 = (mode) => Promise.all([choiceMode(mode), micMode(mode), rhythmMode(mode)].map((x) => x.catch((e) => { check(false, `${mode}: ${e.message.split('\n')[0]}`); })));
+const guard = (f) => f().catch((e) => check(false, `${f.name}: ${String(e.message).split('\n')[0]}`));
+const sec8 = async () => { if (FAST) await Promise.all(['discreet', 'encouraging'].map(run8)); else for (const mode of FEEDBACK_MODES) await run8(mode); };
+const sec10 = async () => {
 // ---- 10. Reduced motion
 {
   const p = await session({ locale: 'en-US', reducedMotion: 'reduce' });
@@ -437,7 +448,10 @@ for (const mode of FEEDBACK_MODES) {
   check((await p.locator('.ml-stars span').count()) === 5, 'reduced motion: stars still shown');
   check(await p.evaluate(() => getComputedStyle(document.querySelector('.ml-stage')).transform) === 'none', 'reduced motion: stage not moved');
 }
+};
 
+if (FAST) await Promise.all([sec3, sec4, sec56, sec7, sec8, sec10].map((f) => guard(f)));
+else for (const f of [sec3, sec4, sec56, sec7, sec8, sec10]) await f();
 check(!errors.length, 'console: ' + errors.join(' | '));
 for (const c of sessions) await c.close();
 await browser.close();

@@ -84,7 +84,8 @@ for (const voice of rounds(['child', 'high', 'medium', 'low'], ['child', 'low'])
     check(samples.length === N && bad === 0, `bass ${voice} L${level}: ${bad} step(s) with a bass note not below the sung note, e.g. ${example}`);
   }
 }
-for (const level of levels(11, [1, 6, 11])) {
+// fast: level 1 only (each level costs about 17 s of real-time microphone feeding); the generators above sample every level
+for (const level of levels(11, [1])) {
   await page.evaluate((l) => localStorage.setItem('ml:settings:second-voice', JSON.stringify({ level: l, voice: 'child', tolerance: 50, phones: false })), level);
   await page.reload();
   await page.click('.ml-start');

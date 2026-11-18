@@ -44,7 +44,7 @@ function checkTune(t, level, tag) {
 page.setDefaultTimeout(15000);
 await page.goto(base);
 const oneLevelSkill = (l) => skillOf(SLUG, l);
-for (const level of levels(6)) {
+for (const level of levels(6, [1, 6])) {
   const cfg = LEVELS[level];
   await setup(level, false);
   const lens = [];
@@ -88,7 +88,7 @@ for (const level of levels(6)) {
   check(!(await overflows(page)), `L${level}: overflow`);
   console.log(`L${level} lengths`, [...new Set(lens)].join(' '));
   // a clean streak of 8 first-try tunes offers the next level (and celebrates on the last)
-  if (!FAST || level === 1 || level === levelCount(SLUG)) {
+  if (!FAST || level === 1) { // fast: the streak of level 1 only (the last level's celebration check is full-only)
     await setup(level, false);
     const last = level === levelCount(SLUG);
     for (let k = 0; k < 9 && !(await isShown(page, '.echo-next button')); k++) {

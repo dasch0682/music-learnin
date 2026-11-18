@@ -136,8 +136,8 @@ for (const level of levels(6)) {
     } else {
       await enter(m.slice(1));
     }
-    await settle();
-    const done = await state();
+    // read the state in the same evaluate that sees the marks: a right answer moves on by itself a few hundred ms later (260 ms in fast mode)
+    const done = await (await page.waitForFunction(() => { const t = window.__test.state(); return t.marks && t; })).jsonValue();
     check(done.marks.every(Boolean) && done.entered.join() === m.slice(1).join(), `L${level} round ${round}: final ${JSON.stringify(done.entered)} vs ${m}`);
     if (dir && round === 2 && level === 6) await page.screenshot({ path: `${dir}/md-6-${s.clef}.png` });
     const mine = await newAttemptsOf(before);
@@ -187,9 +187,10 @@ await page.click('.md-undo');
 check((await state()).entered.length === 0 && (await page.$$eval('.ml-note', (e) => e.length)) === 1, 'undo removes the note');
 for (let i = 0; i < 6; i++) {
   s = await state();
-  const before = JSON.stringify(s.melody);
   await enter(s.melody.slice(1));
-  await page.waitForFunction((b) => { const t = window.__test.state(); return t.entered.length === 0 && !t.locked && JSON.stringify(t.melody) !== b; }, before, { timeout: 8000 });
+  // The next tune can be the same as this one (small pool): wait for the marks of this answer, then for the reset, not for a different melody.
+  await settle();
+  await page.waitForFunction(() => { const t = window.__test.state(); return t.marks === null && t.entered.length === 0 && !t.locked; }, null, { timeout: 8000 });
 }
 check(await page.$eval('.md-next', (e) => e.classList.contains('md-show')), 'next-level button after a clean streak');
 await page.waitForSelector('.md-next.md-show');

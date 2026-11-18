@@ -172,7 +172,7 @@ for (const [instrument, shift] of combos([['Bb', -2], ['C', 0], ['Eb', -9]])) { 
   check(await page.$('.ps-meter') !== null, 'mic: no meter');
   const before = (await attempts()).length;
   // Silence gives no answer, not even a wrong one.
-  await feedFor(null, 1500);
+  await feedFor(null, FAST ? 900 : 1500);
   check((await state()).idx === 0 && !(await state()).wrongLogged && (await attempts()).length === before, 'mic: silence counted as an answer');
   // Short note (under 0.4 s) does not count.
   await feedFor(s.expected[0] + shift, 120);

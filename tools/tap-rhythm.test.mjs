@@ -92,7 +92,7 @@ async function startIfIdle() {
   if (s.phase === 'idle') await page.evaluate(() => document.querySelector('.tr-pad').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })));
 }
 async function load(level, extra = {}) {
-  await page.evaluate((o) => localStorage.setItem('ml:settings:tap-rhythm', JSON.stringify(o)), { level, tempo: 100, tolerance: 'normal', latency: 0, ...extra });
+  await page.evaluate((o) => localStorage.setItem('ml:settings:tap-rhythm', JSON.stringify(o)), { level, tempo: FAST ? 120 : 100, tolerance: 'normal', latency: 0, ...extra });
   await page.reload();
   await page.click('.ml-start');
   await page.waitForFunction(() => window.__test && window.__test.item);
@@ -125,7 +125,8 @@ function content(s, tag) {
 await smoke({ browser, url: base, check });
 await page.goto(base);
 const ONLY = process.env.LEVELS ? process.env.LEVELS.split(',').map(Number) : null;
-for (const level of levels(9)) {
+// fast: level 1 only (each level costs two real-time runs); level 9 is played by the odd-meter section below, level 3 by the tolerance section
+for (const level of levels(9, [1])) {
   if (ONLY && !ONLY.includes(level)) continue;
   await load(level);
   const before = (await attempts()).length;
@@ -168,13 +169,14 @@ for (const level of levels(9)) {
 if (ONLY) { await browser.close(); console.log(failed ? `${failed} failure(s)` : 'all good'); process.exit(failed ? 1 : 0); }
 
 // Tap timing tolerance: early or late inside the tolerance is right, outside it is wrong (the same notes, shifted).
+// fast: level 3, and only two of the four shifts (one inside the tolerance, one outside); each run costs about 6 s of real time
 for (const level of rounds([3, 5, 6, 7, 8], [3])) {
   await load(level);
   await startIfIdle();
   let s = await state();
   const t = s.tol;
   const runs = [['early inside', -Math.round(0.65 * t), true], ['late inside', Math.round(0.65 * t), true], ['late outside', Math.round(1.7 * t), false], ['early outside', -Math.round(1.7 * t), false]];
-  for (const [label, shift, ok] of runs) {
+  for (const [label, shift, ok] of FAST ? [runs[1], runs[2]] : runs) {
     const r = await playRun(false, shift);
     check(r.correct === ok, `L${level}: all taps ${label} (${shift} ms, tolerance ${t} ms) judged ${JSON.stringify(r)}`);
     if (!ok) check(r.miss > 0, `L${level}: ${label}: no missed note reported`);
@@ -187,7 +189,7 @@ for (const level of rounds([3, 5, 6, 7, 8], [3])) {
 }
 // Silence is not an answer: a run without a single tap logs nothing.
 await load(3);
-{
+if (!FAST) { // full only: waits for a whole silent run (about 10 s of real time)
   const before = (await attempts()).length;
   await startIfIdle();
   await page.waitForFunction(() => window.__test.phase === 'count' || window.__test.phase === 'turn', null, { timeout: 5000 });
@@ -230,13 +232,15 @@ for (const id of ['5/8:3+2:eee-q|qe-ee', '5/8:2+3:ee-q.|q-eee', '7/8:2+2+3:q-ee-
   check(mine.length === 1 && mine[0].ok && mine[0].item === id && mine[0].level === 9 && mine[0].skill === skillOf('tap-rhythm', 9), `${id}: attempt ${JSON.stringify(mine.map((a) => [a.item, a.ok]))}`);
   console.log('odd', id, r.correct);
   if (dir && id === '7/8:2+3+2:ee-qe-q|q-q.-ee') await page.screenshot({ path: `${dir}/tr-9-78.png` });
-  await page.waitForTimeout(1500);
+  if (!FAST) await page.waitForTimeout(1500);
 }
-// A tap clearly late (more than the window) must fail.
-await page.evaluate(() => window.__show('5/8:3+2:eee-q|qe-ee'));
-await startIfIdle();
-const late = await playRun(false, 250);
-check(!late.correct, 'late taps judged correct');
+// A tap clearly late (more than the window) must fail (fast: the 'late outside' run above already covers it).
+if (!FAST) {
+  await page.evaluate(() => window.__show('5/8:3+2:eee-q|qe-ee'));
+  await startIfIdle();
+  const late = await playRun(false, 250);
+  check(!late.correct, 'late taps judged correct');
+}
 
 // Level 8 offers level 9 after a clean streak.
 await load(8, { tempo: 140, tolerance: 'easy' });

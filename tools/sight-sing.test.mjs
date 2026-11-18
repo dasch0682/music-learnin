@@ -70,7 +70,8 @@ function theory(s, level, voice) {
 
 await smoke({ browser, url: base, check });
 await page.goto(base);
-for (const level of levels(6)) {
+// fast: level 1 only (each costs about 17 s of real-time microphone feeding)
+for (const level of levels(6, [1])) {
   await setup(level);
   // The first note is played by the app: nothing sung into the microphone counts meanwhile.
   let s0 = await state();

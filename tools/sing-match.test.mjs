@@ -59,7 +59,8 @@ const open = async (level, voice) => {
 await smoke({ browser, url: base, check });
 await page.goto(base);
 const voices = ['child', 'high', 'medium', 'low'];
-for (const level of levels(5)) {
+// fast: level 1 only (each costs about 17 s of real-time microphone feeding); the generator sampling below keeps three levels
+for (const level of levels(5, [1])) {
   for (const pass of rounds([0, 1], [0])) {
     const voice = voices[(level + pass * 2) % 4];
     const tag = `L${level}/${voice}`;

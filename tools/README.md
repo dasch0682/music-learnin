@@ -13,10 +13,25 @@ check the attempts logged in IndexedDB, the music theory, the console and the 39
 | Theme / language | one combination (the second one only in short end checks) | both |
 | Generators (`__test.sample`) | smaller counts | full counts |
 | Timers of the page | delays divided by 5 (`FAST_SPEED`) | real |
-| Duration | about 3 to 4 min | about 20 min with `--jobs 4` (70 min before, one test after the other) |
+| Duration (measured) | at most 300 s on 2 CPUs (about 230 s measured) | FULL_PLACEHOLDER |
 
 Fast mode still opens every game, plays at least one wrong and one right round and checks the log. It does not play the clean
 streak that offers the next level (some tests play it with 6 to 10 short answers anyway), nor every item or every instrument.
+
+### Fast budget (a rule for every new or changed test)
+
+- The whole fast suite must take at most **300 s on 2 CPUs** (GitHub runners have 4, so CI is faster). One test should stay under 30 s;
+  tests on real timers (`launch({ speed: 1 })`, paced by the clock) under 60 s. Times are wall times inside the suite run (4 tests at once), so they
+  are a little longer than the same test alone.
+- The runner prints `WARN slow fast test: <slug> took N s` for a test over its budget and `WARN fast suite took N s` when the total goes over 300 s
+  (the per-test line also appears with `--only`). Fix the warning before you hand over: do not raise the budget.
+- How to stay inside it: one level (or first and last) in fast mode; real-time runs (taps, microphone feeding) are the expensive part (5 to 8 s each),
+  so play one wrong and one right run per test and keep the other levels for the structure checks (generators, `__test.sample`, `__show`);
+  one persistence check per test; one theme/language (`combos`); no fixed sleeps; share a page between checks instead of reloading; run the
+  independent sections of a long test at the same time on their own pages (`Promise.all`, fast only, see `feedback`); a long clean streak or
+  level-up check is full only (`if (!FAST)`, with a comment). Keep each kind of check at least once in fast mode when it costs little.
+- Measured on 2 CPUs: more than 4 tests at once, or more than 2 real-timer tests at once, does not make fast mode faster and makes the
+  timing tests fail (`--jobs 8 --rt 4`: 191 s but 3 failures).
 
 ## Runner
 
@@ -27,15 +42,15 @@ browser contexts in it (isolated localStorage, IndexedDB and service workers, so
 ```
 npm run test:fast -- --only find-a-note,high-low   # chosen tests
 npm run test:changed                               # fast + only what git diff (origin/main + uncommitted) touches
-npm test -- --jobs 4 --retry 1                     # full, 4 at once, a failing test runs once more (reported as flaky if it then passes)
+npm test -- --jobs 4 --retry 1                     # full, 4 at once (the default is already one per CPU, at least 2), a failing test runs once more (reported as flaky if it then passes)
 npm run test:fast -- --verbose                     # one line per test
 npm run test:fast -- --only read-chords --repeat 10  # 10 runs of the chosen tests, one line per test: `ok read-chords 10/10 (max 16 s)` (flakiness)
 PORT=5250 npm run test:fast                        # another port (use one per agent)
 ```
 
-Options: `--fast`, `--jobs N` (default half the CPUs, at least 2; at least 4 with `--fast`, since most of a test is waiting), `--only a,b`,
+Options: `--fast`, `--jobs N` (default: the number of CPUs, at least 2; at least 4 with `--fast`, since most of a test is waiting), `--rt N` (real-timer tests at once), `--only a,b`,
 `--changed`, `--retry N`, `--repeat N` (every selected test N times, per-test pass count; a failure is printed once per test), `--verbose`, `--no-share` (one Chrome per test).
-Tests on real timers (`launch({ speed: 1 })`, found by the runner in their source) run at most `CPUs / 2` at a time (at least 1), whatever `--jobs` says: they are the ones that fail when the machine is busy.
+Tests on real timers (`launch({ speed: 1 })`, found by the runner in their source) run at most `CPUs / 2` at a time in full mode, `CPUs` in fast mode (at least 1; `--rt N` to change), whatever `--jobs` says: they are the ones that fail when the machine is busy.
 The runner passes `TEST_JOBS` (tests at once) to the tests; `TEST_SCALE=n` forces the load factor used by the helpers below.
 
 `--changed` maps `apps/<slug>/` to `tools/<slug>.test.mjs`, `tools/<slug>.test.mjs` to itself, the home page and `public/` to `platform`,

@@ -140,7 +140,7 @@ for (const level of levels(6)) {
 // Each new tune, forced through the test hook at level 3 (whole tune, no transposition): every phrase, then a wrong key.
 await setup(3, 'en', 'light');
 await waitAnswer();
-for (const id of rounds(["amazing-grace", "pont-avignon", "bon-tabac", "alouette", "greensleeves"], ["amazing-grace", "greensleeves"])) {
+for (const id of rounds(["amazing-grace", "pont-avignon", "bon-tabac", "alouette", "greensleeves"], ["greensleeves"])) { // fast: one of the new tunes
   await page.evaluate((x) => window.__test.force(x), id);
   await page.waitForFunction((x) => { const s = window.__test.state(); return s.state === 'answer' && s.tune === x && s.phrase === 0; }, id, { timeout: 20000 });
   for (let p = 0; p < DEG[id].length; p++) {
@@ -182,6 +182,8 @@ await page.click('.tn-next button');
 await waitAnswer();
 check((await state()).level === 2, 'next level button did not change the level');
 // Last level: a clean streak offers nothing (no next-level button, no celebration); short tune forced to keep it cheap.
+// Full only (six more real answers; fast mode does not play the last-level streak).
+if (!FAST) {
 await setup(6, 'fr', 'light');
 await waitAnswer();
 await page.evaluate(() => window.__test.force('au-clair'));
@@ -196,6 +198,7 @@ for (let r = 0; r < 6; r++) {
 }
 check(!(await isShown(page, '.tn-next button')), 'L6: next-level button offered on the last level');
 check(!(await fbLog(page)).slice(f0).includes('level'), 'L6: level-up celebration on the last level');
+}
 // settings persist: level, tempo
 await setup(1, 'fr', 'light');
 await persistCheck({ page, url: base, slug: ID, fields: [[0, 'level', 5], [1, 'tempo', 100]], check, start: true, applied: async (p) => { await p.waitForFunction(() => window.__test.state().state === 'answer', null, { timeout: 20000 }); const st = await p.evaluate(() => window.__test.state()); return st.level === 5 ? '' : `level ${st.level}`; } });

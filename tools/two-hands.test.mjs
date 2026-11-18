@@ -71,7 +71,8 @@ const overflow = () => page.evaluate(() => document.documentElement.scrollWidth 
 const ITEMS = { 1: ['alt', 'alt-r'], 2: ['2:1'], 4: ['3:2'], 5: ['2:3', '4:3'], 6: ['3:4', '5:4', '3:2:fast'] };
 await smoke({ browser, url: base, check });
 await page.goto(base);
-for (const level of levels(6)) {
+// fast: level 1 only (each level costs two real-time runs); level 6 is played by the tolerance section below
+for (const level of levels(6, [1])) {
   await load(level);
   const before = (await attempts()).length;
   let s = await state();
@@ -116,12 +117,13 @@ for (const level of levels(6)) {
 }
 
 // Tap timing tolerance: early or late inside the tolerance is right, outside it is wrong (both hands shifted).
-for (const level of rounds([3, 5, 6], [3])) {
+for (const level of rounds([3, 5, 6], [6])) {
   await load(level);
   await tapPad();
   let s = await state();
   const t = s.tol;
-  for (const [label, shift, ok] of [['early inside', -Math.round(0.65 * t), true], ['late inside', Math.round(0.65 * t), true], ['late outside', Math.round(1.7 * t), false], ['early outside', -Math.round(1.7 * t), false]]) {
+  // fast: one shift inside and one outside the tolerance (each run costs about 5 s of real time)
+  for (const [label, shift, ok] of [['early inside', -Math.round(0.65 * t), true], ['late inside', Math.round(0.65 * t), true], ['late outside', Math.round(1.7 * t), false], ['early outside', -Math.round(1.7 * t), false]].filter((_, i) => !FAST || i === 1 || i === 2)) {
     const r = await playRun(null, { lateMs: shift });
     check(r.correct === ok, `L${level}: all taps ${label} (${shift} ms, tolerance ${t} ms) judged ${JSON.stringify(r)}`);
     await page.waitForFunction(() => { const x = window.__test; return x.phase === 'idle' || (x.phase === 'feedback' && !x.result.correct); }, null, { timeout: 8000 });
@@ -132,7 +134,7 @@ for (const level of rounds([3, 5, 6], [3])) {
 }
 // Silence is not an answer: a run without a single tap logs nothing.
 await load(3);
-{
+if (!FAST) { // full only: waits for a whole silent run
   const before = (await attempts()).length;
   await tapPad();
   await page.waitForFunction(() => window.__test.phase === 'count' || window.__test.phase === 'turn', null, { timeout: 5000 });
@@ -152,16 +154,18 @@ await persistCheck({
 });
 await tapPad();
 {
-  const r = await playRun(null); // turnStart already holds the latency: on time once compensated
+  const r = await playRun(null, FAST ? { keys: true } : {}); // turnStart already holds the latency: on time once compensated (fast: played with the F/J keys, which the streak below would otherwise check)
   check(r.correct, `latency 40: run judged ${JSON.stringify(r)}`);
 }
 TEMPO = 120;
 
 // Late taps (more than the window) fail; the hands are judged apart (right hand only wrong here would need a swap, so all late).
-await load(3, { tolerance: 'strict' });
-await tapPad();
-const late = await playRun(null, { lateMs: 250 });
-check(!late.correct, 'late taps judged correct');
+if (!FAST) { // fast: the 'late outside' run above covers it
+  await load(3, { tolerance: 'strict' });
+  await tapPad();
+  const late = await playRun(null, { lateMs: 250 });
+  check(!late.correct, 'late taps judged correct');
+}
 
 // Keys F and J, and the next-level button after a clean streak (not in fast mode: 8 real-time runs).
 await load(3, { tolerance: 'easy' });

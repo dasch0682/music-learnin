@@ -177,6 +177,8 @@ for (const level of levels(6)) {
     if (k % 8 === 0) await checkDom(t, `L${level}~${k}`);
   }
   await closeSettings(page);
+  // Real-time runs cost 5 to 8 s each. Fast: only level 1 is played (a wrong run, a run too late, an early-inside right run); the other levels are structure only (above). Full: every level plays wrong, too late, too early (odd levels), early-inside and late-inside.
+  if (FAST && level !== 1) { console.log(`L${level} (structure only in fast mode)`); continue; }
   const before = (await attempts()).length;
   const s = await state();
   await clickPlay();
@@ -186,12 +188,12 @@ for (const level of levels(6)) {
   const badNotes = await page.evaluate(() => document.querySelectorAll('.rm-note.rm-bad').length);
   check(badNotes === 1, `L${level}: ${badNotes} red notes`);
   if (dir && level === 5) await page.screenshot({ path: `${dir}/rm-5-wrong.png` });
-  if (level <= 5 && (!FAST || level === 3)) {
+  if (level <= 5 && (!FAST || level === 1)) {
     await clickPlay();
     r = await playRun({ late: Math.round(1.6 * s.tol) });
     check(!r.correct && r.miss > 0, `L${level}: run ${Math.round(1.6 * s.tol)} ms late (tolerance ${s.tol} ms) judged ${JSON.stringify(r)}`);
   }
-  if (level === 3 || !FAST && level % 2 === 1) { // too early is wrong too (not logged: only the first failure is)
+  if (!FAST && level % 2 === 1) { // too early is wrong too (not logged: only the first failure is)
     await clickPlay();
     r = await playRun({ late: -Math.round(1.6 * s.tol) });
     check(!r.correct && r.miss > 0, `L${level}: run ${Math.round(1.6 * s.tol)} ms early judged ${JSON.stringify(r)}`);
@@ -201,6 +203,13 @@ for (const level of levels(6)) {
   check(r.correct && r.miss === 0 && r.wrong === 0, `L${level}: run ${Math.round(0.7 * s.tol)} ms early (tolerance ${s.tol}) judged ${JSON.stringify(r)}`);
   if (dir && level === 4) await page.screenshot({ path: `${dir}/rm-4-right.png` });
   await page.waitForTimeout(300);
+  if (FAST) { // (late-inside run: full only)
+    const mine = (await attempts()).slice(before);
+    check(mine.length === 2 && !mine[0].ok && mine[1].ok && mine.every((a) => a.level === level && a.skill === skillOf('read-melody', level) && a.item === s.item), `L${level}: attempts ${JSON.stringify(mine.map((a) => [a.ok, a.item]))}`);
+    check(!(await overflow()), `L${level}: overflow`);
+    console.log(`L${level}`, mine.map((a) => `${a.skill} ${a.item} ${a.ok}`).join(' | '));
+    continue;
+  }
   // next challenge comes by itself: a run late inside the tolerance is right too
   await page.waitForFunction((it) => window.__test.phase === 'idle' && window.__test.result?.run, null, { timeout: 8000 });
   await page.waitForFunction(() => window.__test.phase === 'idle' && !document.querySelector('.rm-play.rm-ok'), null, { timeout: 8000 });

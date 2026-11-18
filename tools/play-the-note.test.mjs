@@ -95,7 +95,8 @@ for (const level of levels(6)) {
 }
 // ---- microphone with injected pitches ----
 const instruments = ['C', 'Bb', 'Eb', 'F', 'C', 'Bb'];
-for (const level of levels(6)) {
+// fast: level 1 only (each costs about 10 s of real-time microphone feeding)
+for (const level of levels(6, [1])) {
   const ins = instruments[level - 1];
   await open(level, 'mic', ins);
   let s = await ready(true);

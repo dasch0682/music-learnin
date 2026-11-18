@@ -99,8 +99,8 @@ for (const level of levels(6)) {
         await enter(s.cells.slice(k2));
       } else await enter(s.cells.slice(keep));
     } else await enter(s.cells);
-    await settle();
-    const done = await state();
+    // read the state in the same evaluate that sees the marks: a right answer moves on by itself a few hundred ms later (260 ms in fast mode)
+    const done = await (await page.waitForFunction(() => { const t = window.__test.state(); return t.marks && t; })).jsonValue();
     check(done.marks.every(Boolean) && done.entered.join('-') === s.cells.join('-'), `L${level} round ${round}: final ${done.entered} vs ${s.cells}`);
     if (dir && round === 2 && level === 6) await page.screenshot({ path: `${dir}/rd-6-fr.png` });
     const mine = await newAttempts(page, 'rhythm-dictation', before);

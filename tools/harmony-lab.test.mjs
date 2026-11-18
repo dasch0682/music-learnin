@@ -150,7 +150,7 @@ const open = async (level, tempo = 110) => {
 };
 const nextBtnShown = () => isShown(page, '.hl-next');
 await page.goto(base);
-for (const level of levels(8)) {
+for (const level of levels(8, [1, 8])) {
   await open(level);
   const seen = new Set();
   const nRounds = rounds(level >= 7 ? 9 : level === 5 ? 8 : 6, 3);
@@ -241,7 +241,7 @@ for (const level of levels(8)) {
 await open(6);
 {
   const order = [];
-  for (let r = 0; r < rounds(10, 5); r++) {
+  for (let r = 0; r < rounds(10, 3); r++) {
     const x = await st();
     order.push(x.item);
     await solve(x);
@@ -249,7 +249,8 @@ await open(6);
   }
   check(!order.some((x, i) => i && x === order[i - 1]), `L6: same question twice in a row ${order}`);
 }
-for (const level of FAST ? [1, 8] : [1, 2, 3, 4, 5, 6, 7, 8]) {
+// fast: level 1 only (the last level's "nothing offered, celebration" check is full-only: 8 more solved questions)
+for (const level of FAST ? [1] : [1, 2, 3, 4, 5, 6, 7, 8]) {
   await open(level);
   for (let r = 0; r < 8; r++) {
     const x = await st();

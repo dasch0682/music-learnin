@@ -152,7 +152,7 @@ function content(level, s) {
 }
 
 await page.goto(base);
-for (const L of FAST ? [1, 5, 9] : [1, 2, 3, 4, 5, 6, 7, 8, 9, '5b']) {
+for (const L of FAST ? [1, 9] : [1, 2, 3, 4, 5, 6, 7, 8, 9, '5b']) {
   const level = parseInt(L);
   if (process.env.ONLY && !process.env.ONLY.split(',').includes(String(L))) continue;
   if (L === '5b') { await page.reload(); await page.click('.ml-start'); await page.waitForFunction(() => window.__test?.running); }

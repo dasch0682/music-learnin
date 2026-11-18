@@ -1,7 +1,7 @@
 // Runs the game tests (tools/<slug>.test.mjs) against a dev server, in parallel, and prints a short summary.
 //   PORT=5220 node tools/test-all.mjs [options]   (starts a dev server on PORT if none answers)
 // Options:  --fast          fast mode (FAST=1: first/middle/last level, few rounds, accelerated timers)
-//           --jobs N        tests run at the same time (default: half the CPUs, at least 2; at least 4 with --fast)
+//           --jobs N        tests run at the same time (default: the number of CPUs, at least 2; at least 4 with --fast)
 //           --only a,b      only these slugs            --changed   only the tests concerned by the git diff (see tools/README.md)
 //           --retry N       rerun a failing test up to N times; if it then passes it is reported as flaky
 //           --repeat N      run each selected test N times and report the pass count per test (measures flakiness; implies --verbose-free compact output)
@@ -20,8 +20,11 @@ const argv = process.argv.slice(2);
 const flag = (n) => argv.includes('--' + n);
 const opt = (n, d) => { const i = argv.indexOf('--' + n); return i >= 0 ? argv[i + 1] : d; };
 const fast = flag('fast'), verbose = flag('verbose');
-// Most of a test is waiting (audio, real-time taps), so fast mode runs at least 4 at once.
-const jobs = Math.max(1, Number(opt('jobs', Math.max(fast ? 4 : 2, Math.floor(cpus().length / 2)))));
+// Most of a test is waiting (audio, real-time taps), so more tests than CPUs run at once (fast: at least 4; full: at least 2).
+const jobs = Math.max(1, Number(opt('jobs', Math.max(fast ? 4 : 2, cpus().length))));
+// Fast-mode budget (see tools/README.md): the whole suite within 300 s on 2 CPUs, a single test within 30 s.
+// Tests on real timers (taps, microphone fed in real time) are paced by the clock, so they get twice the per-test budget.
+const BUDGET_TOTAL = 300, BUDGET_TEST = 30;
 const retry = Number(opt('retry', 0));
 const repeat = Math.max(1, Number(opt('repeat', 1)) || 1);
 const port = process.env.PORT || '5220';
@@ -53,7 +56,8 @@ const label = fast ? 'fast' : 'full';
 // Tests on real timers (launch({ speed: 1 }): taps against the clock, microphone fed in real time) are the ones that fail when the CPUs are
 // busy, so at most half the CPUs run them at the same time (the other jobs are the tests that mostly wait on accelerated timers).
 const realtime = new Set(all.filter((s) => { try { return /speed:\s*1\b/.test(readFileSync(dir + s + '.test.mjs', 'utf8')); } catch { return false; } }));
-const rtMax = Math.max(1, Math.floor(cpus().length / 2));
+// Fast mode runs them as many as CPUs (they mostly sleep and are short); full mode half as many.
+const rtMax = Math.max(1, Number(opt('rt', Math.floor(cpus().length / (fast ? 1 : 2)))));
 if (!list.length) { console.log(`${label}: no test concerned`); process.exit(0); }
 
 mkdirSync(logs, { recursive: true });
@@ -128,5 +132,11 @@ if (repeat > 1) {
 const shown = new Set();
 for (const r of bad) { if (shown.has(r.slug)) continue; shown.add(r.slug); console.log(`FAIL ${r.slug} (log: tools/.logs/${r.slug}.log)\n` + r.out.trimEnd().split('\n').slice(-15).join('\n')); }
 if (flaky.length) console.log('flaky: ' + flaky.map((r) => r.slug).join(', '));
+// Budget warnings (fast mode, plain runs only): a new or changed test must keep the fast suite within budget.
+if (fast && repeat === 1) {
+  for (const r of results.filter((x) => x.s > BUDGET_TEST * (realtime.has(x.slug) ? 2 : 1)).sort((a, b) => b.s - a.s)) console.log(`WARN slow fast test: ${r.slug} took ${r.s} s (budget ${BUDGET_TEST * (realtime.has(r.slug) ? 2 : 1)} s per test)`);
+  const total = Math.round((Date.now() - t0) / 1000);
+  if (total > BUDGET_TOTAL && list.length === all.length) console.log(`WARN fast suite took ${total} s (budget ${BUDGET_TOTAL} s on 2 CPUs)`);
+}
 console.log(`${label}${repeat > 1 ? ' x' + repeat : ''}: ${results.length - bad.length - flaky.length} ok, ${bad.length} fail, ${flaky.length} flaky (${Math.round((Date.now() - t0) / 1000)} s)`);
 process.exit(bad.length ? 1 : 0);
