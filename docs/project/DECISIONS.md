@@ -13,6 +13,9 @@ Une entrée par décision : date, décision, raison. Les plus récentes en haut.
 - 2026-11-17 — Deux modes : rapide (premier, milieu, dernier niveau, minuteries ×5 sauf jeux de rythme et de micro) et complet. Raison : temps et tokens.
 
 ## Pédagogie et musique
+- 2026-11-23 — Mode silencieux dans le plus grand nombre de jeux possible : interrupteur commun « Son du jeu », champ `silent` par jeu et par niveau, alternatives visuelles quand le son ne donne que le temps ou un modèle (T-009, avant les tags T-008).
+- 2026-11-23 — Un seul tap lance une partie ; une entrée n'est acceptée que quand elle a un sens (phases listen, answer, feedback, free), sinon sans son ni effet (T-010).
+- 2026-11-23 — Principes de design rassemblés dans `docs/project/DESIGN.md`.
 - 2026-11-17 — Après deux erreurs sur une question, la bonne réponse est montrée ; seule la première réponse est enregistrée.
 - 2026-11-17 — Retours : 4 modes par profil, normal par défaut ; sons sans hauteur fixe, ~4× moins forts que l'exercice ; jamais de buzzer ; on félicite l'effort et les séries, jamais la vitesse.
 - 2026-11-17 — second-voice : basse jamais sous do 2 (36), toujours sous la note chantée ; tonalités écartées pour la voix grave si la résolution n'a pas de basse.

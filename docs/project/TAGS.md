@@ -149,5 +149,5 @@ Voir le ticket T-008, section « Tags par jeu » : un tableau, une ligne par jeu
 3. Faut-il d'autres tags ? Quelques idées : `court` (moins d'une minute par série), `à deux` (défi via l'export des résultats), `hors ligne` (tous les jeux le sont déjà, donc ce tag ne filtrerait rien).
 4. Garder les plages de niveaux dans les données (proposé), ou seulement le tag par jeu ? Sans plage, `silencieux` sur music-words dirait à tort que tous les niveaux se jouent sans son.
 5. Pour les jeux silencieux sur une partie des niveaux, ouvrir directement le premier niveau silencieux avec `?silent=1` (proposé), ou laisser le niveau du profil ?
-6. Ajouter une option pour couper le son à tap-rhythm, two-hands, read-melody, play-scales et play-chords, qui n'en ont pas mais sont silencieux (en plus des quatre jeux du ticket) ? Proposé : oui, sinon `silencieux` ne s'appliquerait pas vraiment.
+6. ~~Option pour couper le son~~ : décidé le 2026-11-23, mode silencieux dans le plus grand nombre de jeux possible, voir [T-009](tickets/T-009-mode-silencieux.md). Le tag `silencieux` sera lu dans le champ `silent` établi par T-009.
 7. Brancher le MIDI sur penta-jam et compose (hors ticket) ?

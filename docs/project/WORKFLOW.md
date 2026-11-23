@@ -10,6 +10,7 @@
 | [BOARD.md](BOARD.md) | Tableau des tickets + graphe des dépendances. **Généré**, ne pas éditer. | `node tools/status.mjs` |
 | `tickets/T-NNN-slug.md` | Une tâche : brief, critères de fin, fichiers à lire, rapport. Modèle : [tickets/_TEMPLATE.md](tickets/_TEMPLATE.md). | création, puis fin |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Structure et schémas Mermaid. | quand la structure change |
+| [DESIGN.md](DESIGN.md) | Principes de design des jeux, marqués « en place » ou « ticket ». | à chaque règle décidée ou réalisée |
 | [DECISIONS.md](DECISIONS.md) | Journal des décisions (date, décision, raison). | à chaque décision |
 | [HISTORY.md](HISTORY.md) | Chantiers d'avant les tickets, une ligne chacun. | figé |
 

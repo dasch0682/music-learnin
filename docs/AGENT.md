@@ -9,7 +9,7 @@ Every challenge is bite-size (a few seconds).
 
 ## Read first (and nothing else unless needed)
 
-- `packages/core/README.md` (API and conventions), `packages/core/taxonomy.js`, `packages/core/core.css`.
+- `docs/project/DESIGN.md` (design rules every game follows), `packages/core/README.md` (API and conventions), `packages/core/taxonomy.js`, `packages/core/core.css`.
 - Only the core modules your game uses: `shell.js`, `audio.js`, `music.js`, `mastery.js`, and `staff.js`, `keyboard.js`, `pitch.js` if needed.
 - One reference game close to yours, with its test:
   listening or choices → `apps/ear-cadences/` + `tools/ear-cadences.test.mjs`;

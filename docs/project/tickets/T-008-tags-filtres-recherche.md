@@ -4,7 +4,7 @@ title: Tags, filtres et recherche des jeux sur l'accueil
 status: todo
 model: sonnet
 owner: 
-depends: 
+depends: T-009
 created: 2026-11-23
 closed: 
 commit: 
@@ -17,13 +17,13 @@ Sur l'accueil, on peut filtrer les jeux par tags et les chercher par mot. Un jeu
 - [ ] La proposition [TAGS.md](../TAGS.md) est validée par l'utilisateur : liste, attribution, portée de l'effet.
 - [x] Les points marqués « ? » dans TAGS.md sont vérifiés dans le code, et le tableau est corrigé (voir « Tags par jeu » et TAGS.md).
 - [ ] `GAMES[].tags` et le dictionnaire `TAGS` (FR/EN) sont ajoutés dans `taxonomy.js`.
-- [ ] Une option pour couper le son est ajoutée aux jeux marqués silencieux qui n'en ont pas.
+- [ ] Le tag `silencieux` est lu dans le champ `silent` de `GAMES`, établi par T-009, et pas recopié à la main.
 - [ ] Sur l'accueil :
   - [ ] puces de filtre, combinées par ET ;
   - [ ] recherche sans accents, sur le titre, les tags, le domaine et les compétences, avec synonymes ;
   - [ ] filtre conservé dans l'URL.
-- [ ] Les paramètres d'URL `?silent=1` et `?input=keyboard` sont appliqués par `shell.js` pour la partie seulement, sans être enregistrés.
-- [ ] Le test `catalog` est étendu : chaque tag est connu, et chaque jeu silencieux ne produit aucun son avec `?silent=1`, vérifié par enregistrement audio.
+- [ ] Le lien d'un jeu lancé depuis un filtre avec effet porte le paramètre : `?silent=1` (fait par T-009), `?input=keyboard`. `?input=` est appliqué par `shell.js` pour la partie seulement.
+- [ ] Le test `catalog` est étendu : chaque tag est connu ; le tag `silencieux` concorde avec le champ `silent` (le test sans son est fait par T-009).
 - [ ] Le test `platform` est étendu : filtre, recherche, URL partagée.
 - [ ] `npm run test:changed` : tout ok.
 
@@ -36,10 +36,11 @@ Sur l'accueil, on peut filtrer les jeux par tags et les chercher par mot. Un jeu
 ## Modifier (seulement)
 - `packages/core/taxonomy.js`, `packages/core/shell.js`, `packages/core/README.md`
 - `apps/hub.js`, `apps/hub.css`
-- Le `main.js` des jeux silencieux sans option son (build-scales, build-chords, circle-of-fifths, harmony-lab, et d'autres si la vérification le demande)
 - `tools/catalog.test.mjs`, `tools/platform.test.mjs`, et les tests des jeux modifiés
 
 ## Contexte
+Dépend de T-009, qui fait le mode silencieux dans les jeux et fournit le champ `silent`. Ce ticket ne modifie plus le son des jeux.
+
 Demande de l'utilisateur (2026-11-23). Les tags avec effet (`silencieux`, `sans micro`, `casque conseillé`) appliquent leur réglage au lancement depuis le filtre.
 
 ## Tags par jeu
