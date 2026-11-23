@@ -18,7 +18,7 @@ Détails des retours : [feedback-spec.md](../feedback-spec.md). Conventions de c
 
 - Le premier tap débloque le son (exigé par les navigateurs) et lance la partie. [en place]
 - **Un seul tap lance la partie.** Un double tap ne lance pas deux parties. Sur mobile, le tap ne « traverse » pas le bouton pour toucher ce qui apparaît dessous. [ticket T-010]
-- Le lien d'un jeu peut fixer le niveau (`?level=`) et le silence (`?silent=1`). Ces réglages valent pour la partie seulement, ils ne sont pas enregistrés. [`?level=` en place ; `?silent=1` : ticket T-009]
+- Le lien d'un jeu peut fixer le niveau (`?level=`) et activer le mode silencieux (`?silent=1`). Ces réglages valent pour la partie seulement, ils ne sont pas enregistrés. [`?level=` en place ; `?silent=1` : ticket T-009]
 
 ## 3. Entrées du joueur
 
@@ -47,9 +47,14 @@ Une entrée n'est acceptée que **quand elle a un sens**. Sinon, elle n'a aucun 
 
 ## 5. Son et silence
 
-- Un interrupteur commun « Son du jeu » coupe tout son de la machine. [ticket T-009]
-- Un jeu, ou un niveau, est déclaré silencieux s'il se joue sans entendre. On cherche à en avoir le plus possible. [ticket T-009]
-- Quand le son ne sert qu'à donner le temps ou à montrer un modèle, une alternative visuelle le remplace en mode silencieux. Quand entendre est le but de l'exercice, le jeu n'est pas silencieux. [ticket T-009]
+- Le son fait partie du jeu. Par défaut, chaque jeu garde tous ses sons, qui sont la façon la plus naturelle de jouer. [en place]
+- Le **mode silencieux** est un réglage choisi par le joueur, désactivé par défaut. Il sert à pratiquer quand le son n'est pas possible, par exemple dans les transports ou quand quelqu'un dort. Quand il est actif, la machine ne produit plus aucun son. [ticket T-009]
+- On cherche à ce que le plus de jeux, ou de niveaux, possible restent jouables dans ce mode. Chaque jeu déclare lesquels. Un jeu où entendre est le but n'est pas proposé en mode silencieux. [ticket T-009]
+- En mode silencieux seulement, quand le son ne sert qu'à donner le temps, à montrer un modèle ou à signaler un retour, il est remplacé par :
+  - une alternative visuelle ;
+  - le vibreur du téléphone, si c'est pertinent. Le vibreur peut se couper, et il ne sert jamais pendant que le micro écoute.
+
+  [ticket T-009]
 
 ## 6. Écran et accessibilité
 

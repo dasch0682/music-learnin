@@ -13,7 +13,8 @@ Une entrée par décision : date, décision, raison. Les plus récentes en haut.
 - 2026-11-17 — Deux modes : rapide (premier, milieu, dernier niveau, minuteries ×5 sauf jeux de rythme et de micro) et complet. Raison : temps et tokens.
 
 ## Pédagogie et musique
-- 2026-11-23 — Mode silencieux dans le plus grand nombre de jeux possible : interrupteur commun « Son du jeu », champ `silent` par jeu et par niveau, alternatives visuelles quand le son ne donne que le temps ou un modèle (T-009, avant les tags T-008).
+- 2026-11-23 — Le mode silencieux est un réglage choisi par le joueur, désactivé par défaut, pour pratiquer quand le son n'est pas possible ; il ne retire aucun son au jeu normal. Le vibreur peut remplacer un son quand c'est pertinent (pulsation, retour), jamais pendant que le micro écoute. Précise l'entrée suivante.
+- 2026-11-23 — Mode silencieux dans le plus grand nombre de jeux possible : interrupteur commun, champ `silent` par jeu et par niveau, alternatives visuelles quand le son ne donne que le temps ou un modèle (T-009, avant les tags T-008).
 - 2026-11-23 — Un seul tap lance une partie ; une entrée n'est acceptée que quand elle a un sens (phases listen, answer, feedback, free), sinon sans son ni effet (T-010).
 - 2026-11-23 — Principes de design rassemblés dans `docs/project/DESIGN.md`.
 - 2026-11-17 — Après deux erreurs sur une question, la bonne réponse est montrée ; seule la première réponse est enregistrée.
