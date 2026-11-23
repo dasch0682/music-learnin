@@ -3,14 +3,14 @@
 Site : https://dasch0682.github.io/music-learnin/ · Repo : https://github.com/dasch0682/music-learnin · Méthode : [WORKFLOW.md](WORKFLOW.md)
 
 <!-- auto:start -->
-_Bloc généré par `node tools/status.mjs` le 2026-11-18 06:56 UTC._
+_Bloc généré par `node tools/status.mjs` le 2026-11-23 21:17 UTC._
 
-- Commit : `dbc18f2` (main) — Merge tests-solid: stronger test suite in fast and full modes, app fixes found by the audit
+- Commit : `0f3639b` (main) — Project tracking in docs/project: status, generated board, tickets, decisions, architecture, workflow
 - Contenu : 34 jeux, 79 compétences, 38 fichiers de test
 - Tests rapides (dernier passage complet local) : pas de passage complet enregistré sur cette machine
 - Tests complets (dernier passage local) : pas de passage complet enregistré sur cette machine
-- CI (main, dernier passage) : completed success — Merge tests-solid: stronger test suite in fast and full modes, app fi… — 2026-11-18T02:33:14Z
-- Tickets : 0 en cours, 0 à vérifier, 0 bloqué, 7 à faire, 0 faits — voir [BOARD.md](BOARD.md)
+- CI (main, dernier passage) : completed success — Game tests — 2026-11-23T12:49:53Z
+- Tickets : 0 en cours, 0 à vérifier, 0 bloqué, 8 à faire, 0 faits — voir [BOARD.md](BOARD.md)
 <!-- auto:end -->
 
 ## Phase
