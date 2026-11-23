@@ -49,7 +49,8 @@ Une entrée n'est acceptée que **quand elle a un sens**. Sinon, elle n'a aucun 
 
 - Le son fait partie du jeu. Par défaut, chaque jeu garde tous ses sons, qui sont la façon la plus naturelle de jouer. [en place]
 - Le **mode silencieux** est un réglage choisi par le joueur, désactivé par défaut. Il sert à pratiquer quand le son n'est pas possible, par exemple dans les transports ou quand quelqu'un dort. Quand il est actif, la machine ne produit plus aucun son. [ticket T-009]
-- On cherche à ce que le plus de jeux, ou de niveaux, possible restent jouables dans ce mode. Chaque jeu déclare lesquels. Un jeu où entendre est le but n'est pas proposé en mode silencieux. [ticket T-009]
+- On cherche à ce que le plus de jeux, ou de niveaux, possible restent jouables dans ce mode. Chaque jeu déclare lesquels. [ticket T-009]
+- Si l'on ouvre en mode silencieux un jeu où entendre est le but, il affiche « Ce jeu a besoin du son », avec un bouton pour désactiver le mode silencieux. Un niveau sonore d'un jeu en partie silencieux affiche le même message, avec un bouton vers le premier niveau silencieux. On ne grise rien dans la liste des jeux. [ticket T-009]
 - En mode silencieux seulement, quand le son ne sert qu'à donner le temps, à montrer un modèle ou à signaler un retour, il est remplacé par :
   - une alternative visuelle ;
   - le vibreur du téléphone, si c'est pertinent. Le vibreur peut se couper, et il ne sert jamais pendant que le micro écoute.
@@ -68,4 +69,5 @@ Une entrée n'est acceptée que **quand elle a un sens**. Sinon, elle n'a aucun 
 ## 7. Trouver un jeu
 
 - L'accueil a des filtres par tags et une recherche sans accents, avec des synonymes. Le filtre est conservé dans l'URL. [ticket T-008]
+- Un filtre montre seulement les jeux qui y répondent, sans en griser d'autres. [ticket T-008]
 - Un tag avec effet, comme `silencieux` ou `sans micro`, applique son réglage quand on lance un jeu depuis le filtre. [ticket T-008]

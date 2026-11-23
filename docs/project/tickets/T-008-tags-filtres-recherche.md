@@ -19,7 +19,7 @@ Sur l'accueil, on peut filtrer les jeux par tags et les chercher par mot. Un jeu
 - [ ] `GAMES[].tags` et le dictionnaire `TAGS` (FR/EN) sont ajoutés dans `taxonomy.js`.
 - [ ] Le tag `silencieux` est lu dans le champ `silent` de `GAMES`, établi par T-009, et pas recopié à la main.
 - [ ] Sur l'accueil :
-  - [ ] puces de filtre, combinées par ET ;
+  - [ ] puces de filtre, combinées par ET ; les jeux qui ne répondent pas au filtre sont masqués, pas grisés ;
   - [ ] recherche sans accents, sur le titre, les tags, le domaine et les compétences, avec synonymes ;
   - [ ] filtre conservé dans l'URL.
 - [ ] Le lien d'un jeu lancé depuis un filtre avec effet porte le paramètre : `?silent=1` (fait par T-009), `?input=keyboard`. `?input=` est appliqué par `shell.js` pour la partie seulement.
